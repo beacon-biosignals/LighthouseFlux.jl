@@ -66,6 +66,8 @@ end
 #     return loss(model, input_feature_batch, args...), model(input_feature_batch)
 # end
 
+# TODO Lighthouse.is_early_stopping_exception
+
 #####
 ##### `Flux.Chain` debugging
 #####
