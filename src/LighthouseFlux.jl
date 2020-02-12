@@ -1,9 +1,9 @@
 module LighthouseFlux
 
-using Lighthouse: log_resource_info!, log_value!
-using Flux
+using Flux: Flux
+using Lighthouse: Lighthouse
+using Lighthouse: classes, log_resource_info!, log_value!
 
-# TODO
 """
 - prediction via `(::C)(input_feature_batch::AbstractArray)::AbstractMatrix`
 
@@ -15,6 +15,19 @@ struct FluxClassifier <: Lighthouse.AbstractClassifier
     model::Any
     optimizer::Any
 end
+
+Lighthouse.classes(model::FluxClassifier) = classes(model.model)
+
+function Lighthouse.is_early_stopping_exception(::FluxClassifier, exception)
+    return exception isa Flux.Optimise.StopException
+end
+
+function Lighthouse.onehot(model::FluxClassifier, hard_label)
+    return Flux.onehot(hard_label, 1:length(classes(model)))
+end
+
+
+
 
 #
 # TODO deprecate `default_optimizer`
