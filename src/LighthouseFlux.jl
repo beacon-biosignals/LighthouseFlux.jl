@@ -1,88 +1,87 @@
 module LighthouseFlux
 
+using Zygote: Zygote
 using Flux: Flux
 using Lighthouse: Lighthouse
 using Lighthouse: classes, log_resource_info!, log_value!
 
-"""
-- prediction via `(::C)(input_feature_batch::AbstractArray)::AbstractMatrix`
+#####
+##### `FluxClassifier`
+#####
 
-Calling `(model::C)(input_feature_batch::AbstractArray)` is expected to return
-a matrix where each column is the `model`'s soft label prediction for the
-corresponding sample in `input_feature_batch`.
+# TODO docs
 """
-struct FluxClassifier <: Lighthouse.AbstractClassifier
-    model::Any
-    optimizer::Any
+- `Flux.params`
+- `loss`
+- `loss_and_prediction`
+"""
+struct FluxClassifier{M,O,C} <: Lighthouse.AbstractClassifier
+    model::M
+    optimizer::O
+    classes::C
 end
 
-Lighthouse.classes(model::FluxClassifier) = classes(model.model)
+# TODO redo docs
+"""
+    loss(model, input_feature_batch::AbstractArray, args...)
+
+Return the loss of `model` applied to `input_feature_batch` given `args`.
+
+The last dimension of the given array arguments is the batch size, such that
+`size(input_feature_batch)[end] == size(soft_label_batch)[end]`.
+
+This method must be implemented for each `AbstractClassifier` subtype that
+wishes to support the `learn!` interface.
+"""
+function loss end
+
+# TODO redo docs
+"""
+    loss_and_prediction(model, input_feature_batch, args...)
+"""
+function loss_and_prediction end
+
+#####
+##### Lighthouse `AbstractClassifier` Interface
+#####
+
+Lighthouse.classes(classifier::FluxClassifier) = classifier.classes
 
 function Lighthouse.is_early_stopping_exception(::FluxClassifier, exception)
     return exception isa Flux.Optimise.StopException
 end
 
-function Lighthouse.onehot(model::FluxClassifier, hard_label)
-    return Flux.onehot(hard_label, 1:length(classes(model)))
+function Lighthouse.onehot(classifier::FluxClassifier, hard_label)
+    return Flux.onehot(hard_label, 1:length(classes(classifier)))
 end
 
-
-
-
-#
-# TODO deprecate `default_optimizer`
-
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
+    weights = Zygote.Params(Flux.params(classifier.model))
     for batch in batches
-        train_loss = log_resource_info!(logger, "training/forward_pass";
-                                        suffix="_per_batch") do
-            return loss(classifier.model, batch...)
+        train_loss, back = log_resource_info!(logger, "training/forward_pass";
+                                              suffix="_per_batch") do
+            f = () -> loss(classifier.model, batch...)
+            return Zygote.pullback(f, weights)
         end
-        log_value!(logger, "training/loss_per_batch", Flux.data(train_loss))
+        log_value!(logger, "training/loss_per_batch", train_loss)
         gradients = log_resource_info!(logger, "training/reverse_pass";
                                        suffix="_per_batch") do
-            return Flux.gradient(() -> train_loss, Flux.params(classifier.model))
+            return back(Zygote.sensitivity(train_loss))
         end
         log_resource_info!(logger, "training/update"; suffix="_per_batch") do
-            Flux.Tracker.update!(classifier.optimizer, Flux.params(classifier.model), gradients)
+            Flux.update!(classifier.optimizer, weights, gradients)
             return nothing
         end
     end
     return nothing
 end
 
-#
-# """
-#     loss(model::AbstractClassifier,
-#          input_feature_batch::AbstractArray,
-#          args...)
-#
-# Return the loss of `model` applied to `input_feature_batch` given `args`.
-#
-# The last dimension of the given array arguments is the batch size, such that
-# `size(input_feature_batch)[end] == size(soft_label_batch)[end]`.
-#
-# This method must be implemented for each `AbstractClassifier` subtype that wishes
-# to support the `learn!` interface.
-# """
-# function loss end
-#
-# """
-#     loss_and_prediction(model::AbstractClassifier, input_feature_batch, args...)
-#
-# Return `(loss(model, input_feature_batch, args...), model(input_feature_batch))`.
-#
-# Subtypes of `AbstractClassifier` may overload this function to remove redundant
-# evaluations of `model` during execution of `learn!`.
-# """
-# function loss_and_prediction(model::AbstractClassifier, input_feature_batch, args...)
-#     return loss(model, input_feature_batch, args...), model(input_feature_batch)
-# end
-
-# TODO Lighthouse.is_early_stopping_exception
+function Lighthouse.loss_and_prediction(classifier::FluxClassifier, batch...)
+    return loss_and_prediction(classifier.model, batch...)
+end
 
 #####
-##### `Flux.Chain` debugging
+##### miscellaneous utilities
 #####
 
 """
