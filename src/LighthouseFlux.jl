@@ -6,11 +6,13 @@ using CuArrays: CuArray, unsafe_free!, adapt
 using Lighthouse: Lighthouse
 using Lighthouse: classes, log_resource_info!, log_value!
 
+export FluxClassifier
+
 #####
 ##### `FluxClassifier`
 #####
-
 # TODO docs
+
 """
 - `Flux.params`
 - `loss`
@@ -22,25 +24,15 @@ struct FluxClassifier{M,O,C} <: Lighthouse.AbstractClassifier
     classes::C
 end
 
-# TODO redo docs
 """
-    loss(model, input_feature_batch::AbstractArray, args...)
-
-Return the loss of `model` applied to `input_feature_batch` given `args`.
-
-The last dimension of the given array arguments is the batch size, such that
-`size(input_feature_batch)[end] == size(soft_label_batch)[end]`.
-
-This method must be implemented for each `AbstractClassifier` subtype that
-wishes to support the `learn!` interface.
 """
 function loss end
 
-# TODO redo docs
 """
-    loss_and_prediction(model, input_feature_batch, args...)
 """
-function loss_and_prediction end
+function loss_and_prediction(model, input_feature_batch, args...)
+    return (loss(model, input_feature_batch, args...), model(input_feature_batch))
+end
 
 #####
 ##### Lighthouse `AbstractClassifier` Interface
@@ -70,7 +62,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return back(Zygote.sensitivity(train_loss))
         end
         log_resource_info!(logger, "training/update"; suffix="_per_batch") do
-            Flux.update!(classifier.optimizer, weights, gradients)
+            Flux.Optimise.update!(classifier.optimizer, weights, gradients)
             return nothing
         end
     end
