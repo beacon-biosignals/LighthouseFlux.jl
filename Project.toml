@@ -1,4 +1,10 @@
 name = "LighthouseFlux"
 uuid = "56a5d6c5-c9a8-4db3-ae3d-7c3fdb50c563"
-authors = ["Jarrett Revels <jarrettrevels@gmail.com>"]
+authors = ["Beacon Biosignals, Inc."]
 version = "0.1.0"
+
+[deps]
+CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+Lighthouse = "ac2c24cd-07f0-4848-96b2-1b82c3ea0e59"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
