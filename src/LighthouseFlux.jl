@@ -3,8 +3,7 @@ module LighthouseFlux
 using Zygote: Zygote
 using Flux: Flux
 using CuArrays: CuArray, unsafe_free!, adapt
-using Lighthouse: Lighthouse
-using Lighthouse: classes, log_resource_info!, log_value!
+using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!
 
 export FluxClassifier
 
