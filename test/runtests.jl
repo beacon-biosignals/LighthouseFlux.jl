@@ -29,8 +29,13 @@ end
         logger = Lighthouse.LearnLogger(joinpath(tmpdir, "logs"), "test_run")
         limit = 5
         let counted = 0
-            trigger = Lighthouse.on_change("validation/mean_loss_per_epoch", (_, n) -> (counted+=n; @info counted n))
-            callback = (_, epoch, logger) -> trigger(epoch, logger)
+            upon_loss_decrease = Lighthouse.upon(logger, "validation/mean_loss_per_epoch"; condition=<, initial=Inf)
+            callback = n -> begin
+                upon_loss_decrease() do _
+                    counted += n
+                    @info counted n
+                end
+            end
             Lighthouse.learn!(classifier, logger, () -> training_batches, () -> validation_batches,
                               votes; epoch_limit=limit, post_epoch_callback=callback)
             # NOTE: the RNG chosen above just happens to allow this to work every time,
