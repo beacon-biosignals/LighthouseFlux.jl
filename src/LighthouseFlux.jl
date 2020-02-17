@@ -10,27 +10,63 @@ export FluxClassifier
 #####
 ##### `FluxClassifier`
 #####
-# TODO docs
 
-"""
-- `Flux.params`
-- `loss`
-- `loss_and_prediction`
-"""
-struct FluxClassifier{M,O,C} <: Lighthouse.AbstractClassifier
+struct FluxClassifier{M,O,C,P} <: Lighthouse.AbstractClassifier
     model::M
-    optimizer::O
+    optimiser::O
     classes::C
+    params::P
 end
 
 """
+    FluxClassifier(model, optimiser, classes; params=Flux.params(model))
+
+Return a `FluxClassifier <: Lighthouse.AbstractClassifier` with the given arguments:
+
+- `model`: a Flux model. The model must additionally support LighthouseFlux's [`loss`](@ref)
+  and [`loss_and_prediction`](@ref) functions.
+
+- `optimiser`: a [Flux optimiser](https://fluxml.ai/Flux.jl/stable/training/optimisers/)
+
+- `classes`: a `Vector` or `Tuple` of possible class values; this is the return
+value of `Lighthouse.classes(::FluxClassifier)`.
+
+- `params`: The parameters to optimise during training; generally, a `Zygote.Params`
+value or a value that can be passed to `Zygote.Params`.
+"""
+function FluxClassifier(model, optimiser, classes; params=Flux.params(model))
+    return FluxClassifier(model, optimiser, classes, params)
+end
+
+"""
+    loss(model, batch_arguments...)
+
+Return the scalar loss of `model` given `batch_arguments`.
+
+This method must be implemented for all `model`s passed to [`FluxClassifier`](@ref).
 """
 function loss end
 
 """
+    loss_and_prediction(model, input_batch, other_batch_arguments...)
+
+Return `(model_loss, model_prediction)` where:
+
+- `model_loss` is equivalent to (and defaults to) `loss(model, input_batch, other_batch_arguments...)`.
+
+- `model_prediction` is a matrix where the `i`th column is the soft label prediction for the `i`th
+sample in `input_batch`. Thus, the numnber of columns should be `size(input_batch)[end]`, while the
+number of rows is equal to the number of possible classes predicted by model. `model_prediction`
+defaults to `model(input_batch)`.
+
+This method must be implemented for all `model`s passed to [`FluxClassifier`](@ref), but
+has the default return values described above, so it only needs to be overloaded if the
+default definitions do not yield the expected values for a given `model` type. It
+additionally may be overloaded to avoid redundant computation if `model`'s loss
+function computes soft labels as an intermediate result.
 """
-function loss_and_prediction(model, input_feature_batch, args...)
-    return (loss(model, input_feature_batch, args...), model(input_feature_batch))
+function loss_and_prediction(model, input_batch, other_batch_arguments...)
+    return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
 #####
@@ -48,7 +84,7 @@ function Lighthouse.onehot(classifier::FluxClassifier, hard_label)
 end
 
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
-    weights = Zygote.Params(Flux.params(classifier.model))
+    weights = Zygote.Params(classifier.params)
     for batch in batches
         train_loss, back = log_resource_info!(logger, "training/forward_pass";
                                               suffix="_per_batch") do
@@ -61,7 +97,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return back(Zygote.sensitivity(train_loss))
         end
         log_resource_info!(logger, "training/update"; suffix="_per_batch") do
-            Flux.Optimise.update!(classifier.optimizer, weights, gradients)
+            Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
     end
