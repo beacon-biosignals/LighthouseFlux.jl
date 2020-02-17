@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+LighthouseFlux = "56a5d6c5-c9a8-4db3-ae3d-7c3fdb50c563"
+
+[compat]
+Documenter = "~0.22"
