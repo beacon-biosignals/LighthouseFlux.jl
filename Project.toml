@@ -11,7 +11,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
 Flux = "0.10"
-Lighthouse = "0.6"
+Lighthouse = "0.7"
 julia = "1.3"
 
 [extras]
