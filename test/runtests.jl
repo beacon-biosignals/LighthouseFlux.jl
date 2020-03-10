@@ -21,7 +21,7 @@ end
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
-        x = rand(rng, Float32, 20)
+        x = rand(Float32, 4*c)
         y = model(x)
         classifier = FluxClassifier(model, ADAM(0.1), classes)
         training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
