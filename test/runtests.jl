@@ -21,6 +21,8 @@ end
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
+        x = rand(rng, Float32, 20)
+        y = model(x)
         classifier = FluxClassifier(model, ADAM(0.1), classes)
         training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
         validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
@@ -72,6 +74,11 @@ end
             @test length(logger.logged[key]) == limit
         end
         @test length(logger.logged["evaluation/metrics_per_epoch"]) == limit
+
+        # test `testmode!` is correctly utiltized
+        y₁ = model(x)
+        @test y₁ != y # check if model has trained
+        @test y₁ == model(x) # make sure model output is determinsitic
     end
 end
 
