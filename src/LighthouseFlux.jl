@@ -84,6 +84,7 @@ function Lighthouse.onehot(classifier::FluxClassifier, hard_label)
 end
 
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
+    trainmode!(classifer.model)
     weights = Zygote.Params(classifier.params)
     for batch in batches
         train_loss, back = log_resource_info!(logger, "training/forward_pass";
@@ -101,6 +102,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return nothing
         end
     end
+    testmode!(classifier.model)
     return nothing
 end
 
