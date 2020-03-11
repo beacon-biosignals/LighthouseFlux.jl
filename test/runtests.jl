@@ -21,8 +21,6 @@ end
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
-        x = rand(Float32, 4*c) # get test input
-        y = model(x) # test model output before being trained
         classifier = FluxClassifier(model, ADAM(0.1), classes)
         training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
         validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
@@ -74,6 +72,30 @@ end
             @test length(logger.logged[key]) == limit
         end
         @test length(logger.logged["evaluation/metrics_per_epoch"]) == limit
+
+    end
+end
+
+@testset "test `testmode` behavior" begin
+    mktempdir() do tmpdir
+        rng = MersenneTwister(43)
+        classes = ["class_$i" for i in 1:5]
+        c, n = 5, 3
+        model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
+                                Dense(2*c, c, initW=ones, initb=zeros),
+                                softmax))
+        x = rand(Float32, 4*c) # get test input
+        y = model(x) # test model output before being trained
+        classifier = FluxClassifier(model, ADAM(0.1), classes)
+        training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
+        validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
+        possible_vote_labels = collect(0:length(classes))
+        votes = [rand(rng, possible_vote_labels) for sample in 1:(n*10), voter in 1:7]
+        logger = Lighthouse.LearnLogger(joinpath(tmpdir, "logs"), "test_run")
+        upon_loss_decrease = Lighthouse.upon(logger, "validation/mean_loss_per_epoch"; condition=<, initial=Inf)
+        limit = 5
+        Lighthouse.learn!(classifier, logger, () -> training_batches, () -> validation_batches,
+                              votes; epoch_limit=limit)
 
         # test `testmode!` is correctly utiltized
         y₁ = model(x)
