@@ -35,7 +35,7 @@ value of `Lighthouse.classes(::FluxClassifier)`.
 value or a value that can be passed to `Zygote.Params`.
 """
 function FluxClassifier(model, optimiser, classes; params=Flux.params(model))
-    return FluxClassifier(model, optimiser, classes, params)
+    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params)
 end
 
 """

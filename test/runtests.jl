@@ -22,8 +22,8 @@ end
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
         # Assure that `testmode!` and `trainmode!` is being utilized correctly post training
-        const test_input = rand(MersenneTwister(42), Float32, 4*c) # get test input
-        const y_pretrained = model(test_input) # test model output before being trained
+        test_input = rand(MersenneTwister(42), Float32, 4*c) # get test input
+        y_pretrained = model(test_input) # test model output before being trained
         classifier = FluxClassifier(model, ADAM(0.1), classes)
         training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
         validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
