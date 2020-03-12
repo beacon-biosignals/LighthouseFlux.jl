@@ -35,7 +35,7 @@ value of `Lighthouse.classes(::FluxClassifier)`.
 value or a value that can be passed to `Zygote.Params`.
 """
 function FluxClassifier(model, optimiser, classes; params=Flux.params(model))
-    return FluxClassifier(model, optimiser, classes, params)
+    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params)
 end
 
 """
@@ -84,6 +84,7 @@ function Lighthouse.onehot(classifier::FluxClassifier, hard_label)
 end
 
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
+    Flux.trainmode!(classifier.model)
     weights = Zygote.Params(classifier.params)
     for batch in batches
         train_loss, back = log_resource_info!(logger, "training/forward_pass";
@@ -101,6 +102,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return nothing
         end
     end
+    Flux.testmode!(classifier.model)
     return nothing
 end
 

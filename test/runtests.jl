@@ -21,6 +21,9 @@ end
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
+        # Assure that `testmode!` and `trainmode!` is being utilized correctly post training
+        test_input = rand(MersenneTwister(42), Float32, 4*c) # get test input
+        y_pretrained = model(test_input) # test model output before being trained
         classifier = FluxClassifier(model, ADAM(0.1), classes)
         training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
         validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
@@ -72,6 +75,11 @@ end
             @test length(logger.logged[key]) == limit
         end
         @test length(logger.logged["evaluation/metrics_per_epoch"]) == limit
+
+        # test `testmode!` is correctly utiltized
+        y_post_training = model(test_input)
+        @test y_post_training != y_pretrained # check if model has trained
+        @test y_post_training == model(test_input) # make sure model output is determinsitic
     end
 end
 
