@@ -87,17 +87,17 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
     Flux.trainmode!(classifier.model)
     weights = Zygote.Params(classifier.params)
     for batch in batches
-        train_loss, back = log_resource_info!(logger, "training/forward_pass";
+        train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                               suffix="_per_batch") do
             f = () -> loss(classifier.model, batch...)
             return Zygote.pullback(f, weights)
         end
-        log_value!(logger, "training/loss_per_batch", train_loss)
-        gradients = log_resource_info!(logger, "training/reverse_pass";
+        log_value!(logger, "train/loss_per_batch", train_loss)
+        gradients = log_resource_info!(logger, "train/reverse_pass";
                                        suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
-        log_resource_info!(logger, "training/update"; suffix="_per_batch") do
+        log_resource_info!(logger, "train/update"; suffix="_per_batch") do
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
