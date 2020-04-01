@@ -21,65 +21,65 @@ end
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
                                 Dense(2*c, c, initW=ones, initb=zeros),
                                 softmax))
-        # Assure that `testmode!` and `trainmode!` is being utilized correctly post training
+        # assure that `testmode!` and `trainmode!` is being utilized correctly after training
         test_input = rand(MersenneTwister(42), Float32, 4*c) # get test input
         y_pretrained = model(test_input) # test model output before being trained
         classifier = FluxClassifier(model, ADAM(0.1), classes)
-        training_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
-        validation_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
+        train_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
+        test_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
         possible_vote_labels = collect(0:length(classes))
         votes = [rand(rng, possible_vote_labels) for sample in 1:(n*10), voter in 1:7]
         logger = Lighthouse.LearnLogger(joinpath(tmpdir, "logs"), "test_run")
         limit = 5
         let counted = 0
-            upon_loss_decrease = Lighthouse.upon(logger, "validation/mean_loss_per_epoch"; condition=<, initial=Inf)
+            upon_loss_decrease = Lighthouse.upon(logger, "test_set_prediction/mean_loss_per_epoch"; condition=<, initial=Inf)
             callback = n -> begin
                 upon_loss_decrease() do _
                     counted += n
                     @info counted n
                 end
             end
-            Lighthouse.learn!(classifier, logger, () -> training_batches, () -> validation_batches,
+            Lighthouse.learn!(classifier, logger, () -> train_batches, () -> test_batches,
                               votes; epoch_limit=limit, post_epoch_callback=callback)
             # NOTE: the RNG chosen above just happens to allow this to work every time,
             # since the loss happens to actually "improve" on the random data each epoch
             @test counted == sum(1:limit)
         end
-        for key in ["training/loss_per_batch"
-                    "training/forward_pass/time_in_seconds_per_batch"
-                    "training/forward_pass/gc_time_in_seconds_per_batch"
-                    "training/forward_pass/allocations_per_batch"
-                    "training/forward_pass/memory_in_mb_per_batch"
-                    "training/reverse_pass/time_in_seconds_per_batch"
-                    "training/reverse_pass/gc_time_in_seconds_per_batch"
-                    "training/reverse_pass/allocations_per_batch"
-                    "training/reverse_pass/memory_in_mb_per_batch"
-                    "training/update/time_in_seconds_per_batch"
-                    "training/update/gc_time_in_seconds_per_batch"
-                    "training/update/allocations_per_batch"
-                    "training/update/memory_in_mb_per_batch"]
-            @test length(logger.logged[key]) == length(training_batches)*limit
+        for key in ["train/loss_per_batch"
+                    "train/forward_pass/time_in_seconds_per_batch"
+                    "train/forward_pass/gc_time_in_seconds_per_batch"
+                    "train/forward_pass/allocations_per_batch"
+                    "train/forward_pass/memory_in_mb_per_batch"
+                    "train/reverse_pass/time_in_seconds_per_batch"
+                    "train/reverse_pass/gc_time_in_seconds_per_batch"
+                    "train/reverse_pass/allocations_per_batch"
+                    "train/reverse_pass/memory_in_mb_per_batch"
+                    "train/update/time_in_seconds_per_batch"
+                    "train/update/gc_time_in_seconds_per_batch"
+                    "train/update/allocations_per_batch"
+                    "train/update/memory_in_mb_per_batch"]
+            @test length(logger.logged[key]) == length(train_batches)*limit
         end
-        for key in ["validation/loss_per_batch"
-                    "validation/time_in_seconds_per_batch"
-                    "validation/gc_time_in_seconds_per_batch"
-                    "validation/allocations_per_batch"
-                    "validation/memory_in_mb_per_batch"]
-            @test length(logger.logged[key]) == length(validation_batches)*limit
+        for key in ["test_set_prediction/loss_per_batch"
+                    "test_set_prediction/time_in_seconds_per_batch"
+                    "test_set_prediction/gc_time_in_seconds_per_batch"
+                    "test_set_prediction/allocations_per_batch"
+                    "test_set_prediction/memory_in_mb_per_batch"]
+            @test length(logger.logged[key]) == length(test_batches)*limit
         end
-        for key in ["validation/mean_loss_per_epoch"
-                    "evaluation/time_in_seconds_per_epoch"
-                    "evaluation/gc_time_in_seconds_per_epoch"
-                    "evaluation/allocations_per_epoch"
-                    "evaluation/memory_in_mb_per_epoch"]
+        for key in ["test_set_prediction/mean_loss_per_epoch"
+                    "test_set_evaluation/time_in_seconds_per_epoch"
+                    "test_set_evaluation/gc_time_in_seconds_per_epoch"
+                    "test_set_evaluation/allocations_per_epoch"
+                    "test_set_evaluation/memory_in_mb_per_epoch"]
             @test length(logger.logged[key]) == limit
         end
-        @test length(logger.logged["evaluation/metrics_per_epoch"]) == limit
+        @test length(logger.logged["test_set_evaluation/metrics_per_epoch"]) == limit
 
         # test `testmode!` is correctly utiltized
-        y_post_training = model(test_input)
-        @test y_post_training != y_pretrained # check if model has trained
-        @test y_post_training == model(test_input) # make sure model output is determinsitic
+        y_post_train = model(test_input)
+        @test y_post_train != y_pretrained # check if model has trained
+        @test y_post_train == model(test_input) # make sure model output is determinsitic
     end
 end
 
