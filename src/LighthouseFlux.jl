@@ -118,7 +118,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
 end
 
 function Lighthouse.loss_and_prediction(classifier::FluxClassifier, batch...)
-    return loss_and_prediction(classifier.model, batch...)
+    return Flux.cpu(loss_and_prediction(classifier.model, batch...))
 end
 
 #####
