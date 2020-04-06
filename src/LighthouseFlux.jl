@@ -2,7 +2,6 @@ module LighthouseFlux
 
 using Zygote: Zygote
 using Flux: Flux
-using CuArrays: CuArray, unsafe_free!, adapt
 using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!
 
 export FluxClassifier
@@ -113,26 +112,8 @@ end
 #####
 ##### `CuIterator`
 #####
-# ripped from https://github.com/JuliaGPU/CuArrays.jl/pull/467; this will live
-# here so we can use it while the official version is vetted by the community
-# NOTE: This code isn't testable on Travis CI, so it hurts coverage metrics.
-# This will no longer be a problem once this code properly lives in CuArrays.
 
-mutable struct CuIterator{B}
-    batches::B
-    previous::Any
-    CuIterator(batches) = new{typeof(batches)}(batches)
-end
-
-function Base.iterate(c::CuIterator, state...)
-    item = iterate(c.batches, state...)
-    isdefined(c, :previous) && foreach(unsafe_free!, c.previous)
-    item === nothing && return nothing
-    batch, next_state = item
-    cubatch = map(x -> adapt(CuArray, x), batch)
-    c.previous = cubatch
-    return cubatch, next_state
-end
+Base.@deprecate_moved CuIterator CuArrays false
 
 #####
 ##### miscellaneous utilities
