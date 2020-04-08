@@ -86,10 +86,22 @@ end
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
     Flux.trainmode!(classifier.model)
     weights = Zygote.Params(classifier.params)
+    predictions = # TODO define struture
+    votes = # TODO define votes - where this thing comes from might require external changes...
     for batch in batches
         train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                               suffix="_per_batch") do
-            f = () -> loss(classifier.model, batch...)
+            if classifier.train_set_evaluation
+                # TODO save `batch`'s labels to `votes` - how this happens
+                # might require new interface constraints on `batch`...
+                f = () -> begin
+                    ls, pred = loss_and_prediction(classifier.model, batch...)
+                    # TODO save `pred` to `predictions` + `votes`
+                    return ls
+                end
+            else
+                f = () -> loss(classifier.model, batch...)
+            end
             return Zygote.pullback(f, weights)
         end
         log_value!(logger, "train/loss_per_batch", train_loss)
@@ -101,6 +113,9 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
+    end
+    if classifier.train_set_evaluation
+        # TODO call Lighthouse.test_set_evaluation(...)
     end
     Flux.testmode!(classifier.model)
     return nothing
