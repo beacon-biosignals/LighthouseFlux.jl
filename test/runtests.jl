@@ -80,6 +80,13 @@ end
         y_post_train = model(test_input)
         @test y_post_train != y_pretrained # check if model has trained
         @test y_post_train == model(test_input) # make sure model output is determinsitic
+
+        # test onehot/onecold overloads
+        classifier = FluxClassifier(model, ADAM(0.1), classes;
+                                    onehot=(x -> fill(x, length(classes))),
+                                    onecold=sum)
+        @test Lighthouse.onehot(classifier, 3) == fill(3, length(classes))
+        @test Lighthouse.onecold(classifier, [0.31, 0.43, 0.13]) == 0.87
     end
 end
 
