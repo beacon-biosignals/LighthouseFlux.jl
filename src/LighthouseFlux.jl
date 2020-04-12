@@ -10,15 +10,19 @@ export FluxClassifier
 ##### `FluxClassifier`
 #####
 
-struct FluxClassifier{M,O,C,P} <: Lighthouse.AbstractClassifier
+struct FluxClassifier{M,O,C,P,OH,OC} <: Lighthouse.AbstractClassifier
     model::M
     optimiser::O
     classes::C
     params::P
+    onehot::OH
+    onecold::OC
 end
 
 """
-    FluxClassifier(model, optimiser, classes; params=Flux.params(model))
+    FluxClassifier(model, optimiser, classes; params=Flux.params(model),
+                   onehot=(label -> Flux.onehot(label, 1:length(classes))),
+                   onecold=(label -> Flux.onecold(label, 1:length(classes))))
 
 Return a `FluxClassifier <: Lighthouse.AbstractClassifier` with the given arguments:
 
@@ -32,9 +36,17 @@ value of `Lighthouse.classes(::FluxClassifier)`.
 
 - `params`: The parameters to optimise during training; generally, a `Zygote.Params`
 value or a value that can be passed to `Zygote.Params`.
+
+- `onehot`: the function used to convert hard labels to soft labels when
+`Lighthouse.onehot` is called with this classifier.
+
+- `onecold`: the function used to convert soft labels to hard labels when
+`Lighthouse.onecold` is called with this classifier.
 """
-function FluxClassifier(model, optimiser, classes; params=Flux.params(model))
-    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params)
+function FluxClassifier(model, optimiser, classes; params=Flux.params(model),
+                        onehot=(label -> Flux.onehot(label, 1:length(classes))),
+                        onecold=(label -> Flux.onecold(label, 1:length(classes))))
+    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params, onehot, onecold)
 end
 
 """
@@ -78,9 +90,9 @@ function Lighthouse.is_early_stopping_exception(::FluxClassifier, exception)
     return exception isa Flux.Optimise.StopException
 end
 
-function Lighthouse.onehot(classifier::FluxClassifier, hard_label)
-    return Flux.onehot(hard_label, 1:length(classes(classifier)))
-end
+Lighthouse.onehot(classifier::FluxClassifier, label) = classifier.onehot(label)
+
+Lighthouse.onecold(classifier::FluxClassifier, label) = classifier.onecold(label)
 
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
     Flux.trainmode!(classifier.model)
