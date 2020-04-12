@@ -9,9 +9,9 @@ Lighthouse = "ac2c24cd-07f0-4848-96b2-1b82c3ea0e59"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
-Flux = "0.10"
+Flux = "0.10.4"
 Lighthouse = "0.8"
-Zygote = "0.4"
+Zygote = "0.4.13"
 julia = "1.3"
 
 [extras]
