@@ -45,12 +45,6 @@ function loss_and_prediction(model::DistributedFluxClassifier, input_batch, othe
 end
 
 
-function Lighthouse.log_event!(logger::RemoteChannel, value)
-    logged = string(now(), " | ", value)
-    put!(logger, "events" => logged)
-    return logged
-end
-
 function toarray(gs::Zygote.Grads)
     n = sum(length(p) for p in gs.params)
     a = Array{eltype(first(gs.params))}(undef, n)
@@ -102,22 +96,6 @@ function copy_gradients(ps::Zygote.Params, ga::AbstractVector)
     end
     copy!(gs, ga)
     return gs
-end
-
-function Lighthouse.train!(classifier::AbstractFluxClassifier, batches, logger)
-    Flux.trainmode!(LighthouseFlux.model(classifier))
-    weights = Zygote.Params(LighthouseFlux.params(classifier))
-    @info "Starting train! loop"
-    for batch in batches
-        #train_loss, gradients = loss_and_gradient(classifier, batch, logger)
-        train_loss, gradients = loss_and_gradient(classifier, weights, batch, logger)
-        log_resource_info!(logger, "train/update"; suffix="_per_batch") do
-            Flux.Optimise.update!(optimizer(classifier), weights, gradients)
-            return nothing
-        end
-    end
-    Flux.testmode!(LighthouseFlux.model(classifier))
-    return nothing
 end
 
 function Lighthouse.loss_and_prediction(classifier::FluxClassifier, batch...)
