@@ -129,7 +129,7 @@ function Lighthouse.train!(classifier::AbstractFluxClassifier, batches, logger)
         train_loss, gradients = loss_and_gradient(classifier, batch, logger)
         #train_loss, gradients = loss_and_gradient(classifier, weights, batch, logger)
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
-            Flux.Optimise.update!(LighthouseFlux.optimiser(classifier), weights, gradients)
+            Flux.Optimise.update!(optimiser(classifier), Zygote.Params(LighthouseFlux.params(classifier)), gradients)
             return nothing
         end
     end

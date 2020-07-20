@@ -72,7 +72,7 @@ outbox(logger::DistributedLogger) = logger.outbox
 
 function Lighthouse.log_event!(logger::RemoteChannel, value)
     logged = string(now(), " | ", value)
-    put!(channel, "events" => logged)
+    put!(logger, "events" => logged)
     return logged
 end
 
