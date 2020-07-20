@@ -123,13 +123,12 @@ end
 
 function Lighthouse.train!(classifier::AbstractFluxClassifier, batches, logger)
     Flux.trainmode!(LighthouseFlux.model(classifier))
-    #weights = Zygote.Params(LighthouseFlux.params(classifier))
+    weights = Zygote.Params(LighthouseFlux.params(classifier))
     @info "Starting train! loop"
     for batch in batches
-        train_loss, gradients = loss_and_gradient(classifier, batch, logger)
-        #train_loss, gradients = loss_and_gradient(classifier, weights, batch, logger)
+        train_loss, gradients = loss_and_gradient(classifier, weights, batch, logger)
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
-            Flux.Optimise.update!(optimiser(classifier), Zygote.Params(LighthouseFlux.params(classifier)), gradients)
+            Flux.Optimise.update!(optimizer(classifier), weights, gradients)
             return nothing
         end
     end

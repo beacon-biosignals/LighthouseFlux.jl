@@ -18,6 +18,6 @@ include("distributed.jl")
 export FluxClassifier, DistributedLogger, DistributedFluxClassifier
 
 # stuff that is defined in `distributed/*` should live in its own package outside of LighthouseFlux
-export defineat
+export @defineat
 
 end # module
