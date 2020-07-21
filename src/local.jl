@@ -110,7 +110,7 @@ function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logge
         f = () -> loss(LighthouseFlux.model(classifier), batch...)
         return Zygote.pullback(f, weights)
     end
-    log_value!(log_channel, "train/loss_per_batch", train_loss)
+    log_value!(logger, "train/loss_per_batch", train_loss)
     gradients = log_resource_info!(logger, "train/reverse_pass";
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
