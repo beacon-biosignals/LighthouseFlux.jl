@@ -115,6 +115,7 @@ function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logge
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
+    return train_loss, gradients
 end
 
 #####
