@@ -103,7 +103,7 @@ model(classifier::FluxClassifier) = classifier.model
 params(classifier::FluxClassifier) = classifier.params
 optimizer(classifier::FluxClassifier) = classifier.optimiser
 
-function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logger::LearnLogger)
+function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logger::Lighthouse.LearnLogger)
     batch = assemble_batch(batchspec)
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
