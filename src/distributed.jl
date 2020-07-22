@@ -83,7 +83,7 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, batch
         @show loss
         train_loss += loss
         for (gp, wp) in zip(grads.params, weights)
-            println("grad params size $(size(gp))   weight param size $(size(wp))")
+            @info "grad params size $(size(gp))   weight param size $(size(wp))"
         end
     end
     return train_loss, copy_gradients(weights, gradients)
