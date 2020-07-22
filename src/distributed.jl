@@ -45,7 +45,6 @@ function loss_and_prediction(model::DistributedFluxClassifier, input_batch, othe
     return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
-
 function toarray(gs::Zygote.Grads)
     n = sum(length(p) for p in gs.params)
     a = Array{eltype(first(gs.params))}(undef, n)
@@ -53,39 +52,40 @@ function toarray(gs::Zygote.Grads)
     return a
 end
 
-function loss_and_gradient(classifier::FluxClassifier, weights, batchin, logger::DistributedLogger)
+function loss_and_gradient(classifier::FluxClassifier, batchin, logger::DistributedLogger)
     batch = LighthouseFlux.assemble_batch(batchin)
     @info "batch of type $(typeof(batch))"
     @info "logger of type $(typeof(logger))"
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
         f = () -> loss(classifier.model, batch...)
+        weights = Zygote.Params(LighthouseFlux.params(classifier))
         return Zygote.pullback(f, weights)
-        # return Zygote.pullback(f, LighthouseFlux.params(classifier))
-        # return Zygote.pullback(f, Zygote.Params(LighthouseFlux.params(classifier)))
     end
     log_value!(logger, "train/loss_per_batch", train_loss)
     gradients = log_resource_info!(logger, "train/reverse_pass";
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    return (train_loss, toarray(gradients))
+    return (train_loss, gradients)
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, batch, logger)
+function loss_and_gradient(classifier::DistributedFluxClassifier, batch, logger)
     shards = shard(classifier.pids, batch...)
-    #shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, b, logger) for (p,b) in shards)
-    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, weights, b, logger) for (p,b) in shards)
+    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, b, logger) for (p,b) in shards)
+    #shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, weights, b, logger) for (p,b) in shards)
     return_channel = remotecall_fetch_all(shards)
     train_loss = 0.0
-    gradients = zeros(eltype(first(weights)), sum(length(p) for p in weights))
+    weights = Zygote.Params(LighthouseFlux.params(classifier))
     @info "iterating through return_channel"
     for _ in shards
         (p, (loss, grad)) = take!(return_channel)
         @show p
         @show loss
         train_loss += loss
-        gradients += grad
+        for (gp, wp) in zip(grads.params, weights)
+            println("grad params size $(size(gp))   weight param size $(size(wp))")
+        end
     end
     return train_loss, copy_gradients(weights, gradients)
 end
