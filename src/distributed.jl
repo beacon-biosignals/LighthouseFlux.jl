@@ -52,7 +52,7 @@ function toarray(gs::Zygote.Grads)
     return a
 end
 
-function loss_and_gradient(classifier::FluxClassifier, batchin, logger::DistributedLogger)
+function loss_and_gradient(classifier::FluxClassifier, batchin, logger::RemoteChannel)
     batch = LighthouseFlux.assemble_batch(batchin)
     @info "batch of type $(typeof(batch))"
     @info "logger of type $(typeof(logger))"
