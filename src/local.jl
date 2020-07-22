@@ -80,6 +80,10 @@ function loss_and_prediction(model, input_batch, other_batch_arguments...)
     return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
+function Lighthouse.loss_and_prediction(classifier::FluxClassifier, batch...)
+    return Flux.cpu(loss_and_prediction(classifier.model, batch...))
+end
+
 #####
 ##### Lighthouse `AbstractClassifier` Interface
 #####
