@@ -70,13 +70,12 @@ function loss_and_gradient(classifier::FluxClassifier, batchin, logger::Distribu
     return (train_loss, gradients)
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, batch, logger)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, batch, logger)
     shards = shard(classifier.pids, batch...)
     shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, b, logger) for (p,b) in shards)
     #shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, weights, b, logger) for (p,b) in shards)
     return_channel = remotecall_fetch_all(shards)
     train_loss = 0.0
-    weights = Zygote.Params(LighthouseFlux.params(classifier))
     @info "iterating through return_channel"
     for _ in shards
         (p, (loss, grad)) = take!(return_channel)
