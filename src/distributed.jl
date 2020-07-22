@@ -98,7 +98,3 @@ function copy_gradients(ps::Zygote.Params, ga::AbstractVector)
     return gs
 end
 
-function Lighthouse.loss_and_prediction(classifier::FluxClassifier, batch...)
-    return Flux.cpu(loss_and_prediction(classifier.model, batch...))
-end
-

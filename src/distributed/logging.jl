@@ -99,58 +99,6 @@ function Lighthouse.log_resource_info!(f, logger::RemoteChannel, section::Abstra
     return result
 end
 
-# TODO replace this with `Lighthouse.upon` generic in logger or logger.logged
-"""
-    upon(logged::Dict{String,Any}, field::AbstractString; condition, initial)
-
-Return a closure that can be called to check the most recent state of
-`logger.logged[field]` and trigger a caller-provided function when
-`condition(recent_state, previously_chosen_state)` is `true`.
-
-For example:
-
-```
-upon_loss_decrease = upon(logger, "test_set_prediction/mean_loss_per_epoch";
-                          condition=<, initial=Inf)
-
-save_upon_loss_decrease = _ -> begin
-    upon_loss_decrease(new_lowest_loss -> save_my_model(model, new_lowest_loss),
-                       consecutive_failures -> consecutive_failures > 10 && Flux.stop())
-end
-
-learn!(model, logger, get_train_batches, get_test_batches, votes;
-       post_epoch_callback=save_upon_loss_decrease)
-```
-
-Specifically, the form of the returned closure is `f(on_true, on_false)` where
-`on_true(state)` is called if `condition(state, previously_chosen_state)` is
-`true`. Otherwise, `on_false(consecutive_falses)` is called where `consecutive_falses`
-is the number of `condition` calls that have returned `false` since the last
-`condition` call returned `true`.
-
-Note that the returned closure is a no-op if `logger.logged[field]` has not
-been updated since the most recent call.
-"""
-function Lighthouse.upon(logged::Dict{String,Vector{Any}}, field::AbstractString; condition, initial)
-    history = get!(() -> Any[], logged, field)
-    previous_length = length(history)
-    current = isempty(history) ? initial : last(history)
-    consecutive_false_count = 0
-    return (on_true, on_false=(_ -> nothing)) -> begin
-        length(history) == previous_length && return nothing
-        previous_length = length(history)
-        candidate = last(history)
-        if condition(candidate, current)
-            consecutive_false_count = 0
-            current = candidate
-            on_true(current)
-        else
-            consecutive_false_count += 1
-            on_false(consecutive_false_count)
-        end
-    end
-end
-
 """
     read_log_archive(archive_path::String)
 
@@ -167,26 +115,4 @@ function read_log_archive(archive_path::String)
     end
     return logged
 end
-
-
-# Stuff below is mostly useless. Write your own loop / use a Transducer to handle all them logs yourself.
-# """
-#     handle(outbox, handler)
-# 
-# iterates through `field => value` pairs of `outbox, and does something with them.
-# 
-# `handler` is expected to be a curried function with signature: `handler: String -> (Any -> ())`
-# 
-# """
-# function handle_logs(log_channel, handler)
-#     for (field, value) in log_channel
-#         handler(field)(value)
-#     end
-# end
-# 
-# function handle_logs(logged::Dict{String,Any}, default_handler, handlers::Dict{String,Function}=Dict{String,Function}())
-#     for (field, values) in logged
-#         handler(field).(values) 
-#     end
-# end
 
