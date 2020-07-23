@@ -64,7 +64,7 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    return (train_loss, toarray(gradients))
+    return (train_loss, gradients)
 end
 
 function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel)
