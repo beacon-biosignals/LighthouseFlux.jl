@@ -45,18 +45,14 @@ function loss_and_prediction(model::DistributedFluxClassifier, input_batch, othe
     return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
-
-function toarray(gs::Zygote.Grads)
-    n = sum(length(p) for p in gs.params)
-    a = Array{eltype(first(gs.params))}(undef, n)
-    copy!(gs, a)
-    return a
-end
-
-function loss_and_gradient(classifier::FluxClassifier, weights, batchin, logger::DistributedLogger)
-    batch = LighthouseFlux.assemble_batch(batchin)
-    @info "batch of type $(typeof(batch))"
-    @info "logger of type $(typeof(logger))"
+function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
+    batch = try
+        take!(_batches)
+    catch e
+        return nothing
+    end
+    # @info "batch of type $(typeof(batch))"
+    # @info "logger of type $(typeof(logger))"
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
         f = () -> loss(classifier.model, batch...)
@@ -72,30 +68,37 @@ function loss_and_gradient(classifier::FluxClassifier, weights, batchin, logger:
     return (train_loss, toarray(gradients))
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, batch, logger)
-    shards = shard(classifier.pids, batch...)
-    #shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, b, logger) for (p,b) in shards)
-    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, weights, b, logger) for (p,b) in shards)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel)
+    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, logger) for p in classifier.pids)
     return_channel = remotecall_fetch_all(shards)
-    train_loss = 0.0
-    gradients = zeros(eltype(first(weights)), sum(length(p) for p in weights))
-    @info "iterating through return_channel"
-    for _ in shards
-        (p, (loss, grad)) = take!(return_channel)
-        @show p
-        @show loss
-        train_loss += loss
-        gradients += grad
+    train_loss, gradients = nothing, nothing
+    for _ in 1:length(shards)
+        p, r = take!(return_channel)
+        if r !== nothing
+            loss, grad = r
+            if train_loss === nothing
+                train_loss, gradients = loss, grad
+            else
+                # @show p
+                # @show loss
+                train_loss += loss
+                for (p, dp) in zip(gradients.params, grad.params)
+                    # @show size(gradients[p])
+                    # @show size(grad[dp])
+                    array = gradients[p]
+                    array += grad[dp]
+                end
+            end
+        end
     end
-    return train_loss, copy_gradients(weights, gradients)
+    @show train_loss
+    return train_loss, reindex(gradients, weights)
 end
 
-function copy_gradients(ps::Zygote.Params, ga::AbstractVector)
-    gs = Zygote.Grads(IdDict{Any,Any}(), ps)
-    for p in ps
-        gs.grads[p] = p
+function reindex(g, w)
+    grads = IdDict()
+    for (gp, wp) in zip(g.params, w)
+        grads[wp] = g[gp]
     end
-    copy!(gs, ga)
-    return gs
+    return Zygote.Grads(grads, w)
 end
-

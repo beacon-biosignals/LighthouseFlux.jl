@@ -1,12 +1,4 @@
 
-function shard(ps::AbstractVector{Int}, xs...)
-    xs = collect(xs)
-    # sort both for shard consistency
-    sort!(xs)
-    sort!(ps)
-    return Dict{Int,Any}(p => part for (part, p) in zip(Iterators.partition(xs, length(xs) ÷ length(ps)), ps))
-end
-
 function remotecall_fetch_all(objects::Dict{Int,T}) where T
     channel = Channel(length(objects))
     for (p, obj) in objects
