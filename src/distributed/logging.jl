@@ -68,7 +68,11 @@ outbox(logger::DistributedLogger) = logger.outbox
 ##### Interface similar to Lighthouse.LearnLogger
 #####
 
-# main difference is no `log_plot!`, just use `log_value!(logger, field, plot_data)` instead
+function Lighthouse.log_plot!(logger::RemoteChannel, field::AbstractString, plot, plot_data)
+    log_value!(logger, field, plot_data)
+    log_value!(logger, "__plot__" * field, plot)
+    return plot
+end
 
 function Lighthouse.log_event!(logger::RemoteChannel, value)
     logged = string(now(), " | ", value)

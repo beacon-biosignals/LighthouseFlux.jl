@@ -41,22 +41,61 @@ default definitions do not yield the expected values for a given `model` type. I
 additionally may be overloaded to avoid redundant computation if `model`'s loss
 function computes soft labels as an intermediate result.
 """
-function loss_and_prediction(model::DistributedFluxClassifier, input_batch, other_batch_arguments...)
-    return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
+function loss_and_prediction_and_votes(classifier::FluxClassifier)
+    batch = try
+        first(_test_batches)
+    catch e
+        @error "error taking _test_batches" exception=(e, catch_backtrace())
+        return nothing
+    end
+    votes = try
+        take!(_votes_indices_channel)
+    catch e
+        @error "error taking _votes_indices" exception=(e, catch_backtrace())
+        return nothing
+    end
+
+    Flux.testmode!(classifier.model)
+
+    # XXX you would think this line would just work:
+    # l, preds = loss_and_prediction(classifier.model, batch...)
+    # but for some weird reason when a gpu model has been sent over to another process, you need to do:
+    f = () -> loss_and_prediction(classifier.model, batch...)
+    weights = Zygote.Params(Flux.params(classifier.model))
+    (l, preds), back = Zygote.pullback(f, weights)
+    # or else you get a bunch of NaNs
+
+    #batch, votes = Flux.cpu.((batch, votes))
+    #@info "test extrema(input)  $(extrema(batch[1]))  extrema labels $(extrema(batch[2]))  extrema(preds) $(extrema(preds)) loss $l     extrema votes $(extrema(votes))"
+    return (l, preds, votes)
+end
+
+function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier)
+    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model) for p in classifier.pids)
+    return_channel = remotecall_fetch_all(shards)
+    results = Dict{Int,Any}( take!(return_channel) for _ in shards )
+    return [results[p] for p in classifier.pids if results[p] !== nothing ]
 end
 
 function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
     batch = try
-        take!(_batches)
+        first(_training_batches)
     catch e
+        @error "loss_and_gradient on worker" exception=(e, catch_backtrace())
         return nothing
     end
+    l, preds = loss_and_prediction(classifier.model, batch...)
+    input_batch = Flux.cpu(batch)
+    # @info "train extrema(input) $(extrema(batch[1]))"
     # @info "batch of type $(typeof(batch))"
+    # @info typeof(classifier)
+    # @info typeof(classifier.model)
+    # @info "batch of sizes $(size(batch[1])) $(size(batch[2]))"
     # @info "logger of type $(typeof(logger))"
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
         f = () -> loss(classifier.model, batch...)
-        weights = Zygote.Params(LighthouseFlux.params(classifier))
+        weights = Zygote.Params(Flux.params(classifier.model))
         return Zygote.pullback(f, weights)
     end
     log_value!(logger, "train/loss_per_batch", train_loss)
@@ -64,16 +103,25 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    return (train_loss, gradients)
+    # @info "train extrema(input)  $(extrema(input_batch[1]))  extrema labels $(extrema(input_batch[2]))   extrema(preds) $(extrema(preds)) loss $l"
+    # input_batch = Flux.cpu(batch)
+    # @info "train extrema(input)  $(extrema(input_batch[1]))  extrema labels $(extrema(input_batch[2]))   loss $train_loss)"
+    # @show typeof(gradients)
+    # @info "gpu grad types"
+    # for p in gradients.params
+    #     @info typeof(p), typeof(gradients[p])
+    # end
+    return (train_loss, [gradients[p] for p in gradients.params])
 end
 
 function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel)
     shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, logger) for p in classifier.pids)
     return_channel = remotecall_fetch_all(shards)
-    train_loss, gradients = nothing, nothing
+    train_loss, gradients, count = nothing, nothing, 0.0
     for _ in 1:length(shards)
         p, r = take!(return_channel)
-        if r !== nothing
+        # @info typeof(r)
+        if r !== nothing && eltype(r[2]) != Nothing
             loss, grad = r
             if train_loss === nothing
                 train_loss, gradients = loss, grad
@@ -81,23 +129,58 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
                 # @show p
                 # @show loss
                 train_loss += loss
-                for (p, dp) in zip(gradients.params, grad.params)
-                    # @show size(gradients[p])
-                    # @show size(grad[dp])
-                    array = gradients[p]
-                    array += grad[dp]
-                end
+                count += 1.0
+                map(+, gradients, grad)
+                # for (p, dp) in zip(gradients.params, grad.params)
+                #     @show size(gradients[p])
+                #     @show size(grad[dp])
+                #     array = gradients[p]
+                #     array += grad[dp]
+                # end
             end
         end
     end
+    # train_loss /= count
+    # for (_,g) in gradients.grads
+    #     g ./= count
+    # end
     @show train_loss
     return train_loss, reindex(gradients, weights)
 end
 
-function reindex(g, w)
+function reindex(g::Vector, w)
+    grads = IdDict()
+    for (gp, wp) in zip(g, w)
+        grads[wp] = gp
+    end
+    return Zygote.Grads(grads, w)
+end
+
+function reindex(g::Zygote.Grads, w)
     grads = IdDict()
     for (gp, wp) in zip(g.params, w)
         grads[wp] = g[gp]
     end
     return Zygote.Grads(grads, w)
 end
+
+function Lighthouse.predict!(model::DistributedFluxClassifier,
+                             predicted_soft_labels::AbstractMatrix,
+                             batches::UnitRange{Int}, logger;
+                             logger_prefix::AbstractString)
+    losses = []
+    for b in batches
+        for (batch_loss, soft_label_batch, votes) in loss_and_prediction_and_votes(model)
+            for (i, soft_label) in enumerate(eachcol(soft_label_batch))
+                predicted_soft_labels[votes[i], :] = soft_label
+            end
+            log_value!(logger, logger_prefix * "/loss_per_batch", batch_loss)
+            push!(losses, batch_loss)
+        end
+    end
+    @info repr(losses)
+    mean_loss = sum(losses) ./ length(losses)
+    log_value!(logger, logger_prefix * "/mean_loss_per_epoch", mean_loss)
+    return mean_loss
+end
+

@@ -12,6 +12,10 @@ function buffered_batch_loader(batchspecs, batch_assembler; buffer_size=2)
                 put!(future_buffer, batch_assembler(batchspec...))
                 put!(channel, fetch(future))
             end
+            for i in 1:buffer_size
+                future = take!(future_buffer)
+                put!(channel, fetch(future))
+            end
         catch e
             @error "Error assembling batch" exception=(e, catch_backtrace())
             println(e)
