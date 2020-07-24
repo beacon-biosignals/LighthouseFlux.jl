@@ -1,9 +1,3 @@
-include("distributed/sharding.jl")
-include("distributed/logging.jl")
-include("distributed/dataloader.jl")
-# everything in `distributed/` could be broken off into its own package
-# it is not specific to Flux or Lighthouse
-
 struct DistributedFluxClassifier <: AbstractFluxClassifier
     pids::AbstractVector{Int}
     model::FluxClassifier

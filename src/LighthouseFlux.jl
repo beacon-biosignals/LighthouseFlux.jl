@@ -13,11 +13,16 @@ using Serialization
 abstract type AbstractFluxClassifier <: Lighthouse.AbstractClassifier end
 
 include("local.jl")
+
+# everything in `distributed/` should go somewhere else, it has nothing to do with Lighthouse of Flux
+include("distributed/dataloader.jl")
+include("distributed/logging.jl")
+include("distributed/sharding.jl")
+
 include("distributed.jl")
 
 export FluxClassifier, DistributedLogger, DistributedFluxClassifier
 
-# stuff that is defined in `distributed/*` should live in its own package outside of LighthouseFlux
-export @defineat
+export @defineat, buffered_batch_loader
 
 end # module
