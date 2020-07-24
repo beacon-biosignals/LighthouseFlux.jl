@@ -54,19 +54,8 @@ function loss_and_prediction_and_votes(classifier::FluxClassifier)
         @error "error taking _votes_indices" exception=(e, catch_backtrace())
         return nothing
     end
-
     Flux.testmode!(classifier.model)
-
-    # XXX you would think this line would just work:
-    # l, preds = loss_and_prediction(classifier.model, batch...)
-    # but for some weird reason when a gpu model has been sent over to another process, you need to do:
-    f = () -> loss_and_prediction(classifier.model, batch...)
-    weights = Zygote.Params(Flux.params(classifier.model))
-    (l, preds), back = Zygote.pullback(f, weights)
-    # or else you get a bunch of NaNs
-
-    #batch, votes = Flux.cpu.((batch, votes))
-    #@info "test extrema(input)  $(extrema(batch[1]))  extrema labels $(extrema(batch[2]))  extrema(preds) $(extrema(preds)) loss $l     extrema votes $(extrema(votes))"
+    l, preds = loss_and_prediction(classifier.model, batch...)
     return (l, preds, votes)
 end
 
@@ -84,14 +73,6 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
         @error "loss_and_gradient on worker" exception=(e, catch_backtrace())
         return nothing
     end
-    l, preds = loss_and_prediction(classifier.model, batch...)
-    input_batch = Flux.cpu(batch)
-    # @info "train extrema(input) $(extrema(batch[1]))"
-    # @info "batch of type $(typeof(batch))"
-    # @info typeof(classifier)
-    # @info typeof(classifier.model)
-    # @info "batch of sizes $(size(batch[1])) $(size(batch[2]))"
-    # @info "logger of type $(typeof(logger))"
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
         f = () -> loss(classifier.model, batch...)
@@ -103,14 +84,6 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    # @info "train extrema(input)  $(extrema(input_batch[1]))  extrema labels $(extrema(input_batch[2]))   extrema(preds) $(extrema(preds)) loss $l"
-    # input_batch = Flux.cpu(batch)
-    # @info "train extrema(input)  $(extrema(input_batch[1]))  extrema labels $(extrema(input_batch[2]))   loss $train_loss)"
-    # @show typeof(gradients)
-    # @info "gpu grad types"
-    # for p in gradients.params
-    #     @info typeof(p), typeof(gradients[p])
-    # end
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
@@ -120,30 +93,19 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
     train_loss, gradients, count = nothing, nothing, 0.0
     for _ in 1:length(shards)
         p, r = take!(return_channel)
-        # @info typeof(r)
         if r !== nothing && eltype(r[2]) != Nothing
             loss, grad = r
             if train_loss === nothing
                 train_loss, gradients = loss, grad
             else
-                # @show p
-                # @show loss
                 train_loss += loss
                 count += 1.0
                 map(+, gradients, grad)
-                # for (p, dp) in zip(gradients.params, grad.params)
-                #     @show size(gradients[p])
-                #     @show size(grad[dp])
-                #     array = gradients[p]
-                #     array += grad[dp]
-                # end
             end
         end
     end
     # train_loss /= count
-    # for (_,g) in gradients.grads
-    #     g ./= count
-    # end
+    # map(g -> g / count, gradients)
     @show train_loss
     return train_loss, reindex(gradients, weights)
 end

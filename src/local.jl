@@ -146,12 +146,6 @@ function Lighthouse.loss_and_prediction(classifier::AbstractFluxClassifier, batc
 end
 
 #####
-##### `CuIterator`
-#####
-
-Base.@deprecate_moved CuIterator CuArrays false
-
-#####
 ##### miscellaneous utilities
 #####
 
