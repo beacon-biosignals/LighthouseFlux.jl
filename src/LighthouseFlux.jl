@@ -21,6 +21,8 @@ include("distributed/sharding.jl")
 
 include("distributed.jl")
 
+include("optimiser.jl")
+
 export FluxClassifier, DistributedLogger, DistributedFluxClassifier
 
 export @defineat, buffered_batch_loader
