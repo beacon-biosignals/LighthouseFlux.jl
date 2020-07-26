@@ -78,7 +78,6 @@ function loss_and_gradient(model, logger::RemoteChannel)
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    @show train_loss
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
@@ -135,7 +134,7 @@ function Lighthouse.predict!(model::DistributedFluxClassifier,
             push!(losses, batch_loss)
         end
     end
-    @info repr(losses)
+    # @info repr(losses)
     mean_loss = sum(losses) ./ length(losses)
     log_value!(logger, logger_prefix * "/mean_loss_per_epoch", mean_loss)
     return mean_loss

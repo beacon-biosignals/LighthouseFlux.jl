@@ -69,7 +69,7 @@ outbox(logger::DistributedLogger) = logger.outbox
 #####
 
 function Lighthouse.log_plot!(logger::RemoteChannel, field::AbstractString, plot, plot_data)
-    log_value!(logger, field, plot_data)
+    log_value!(logger, "__plot_data__" * field, plot_data)
     log_value!(logger, "__plot__" * field, plot)
     return plot
 end
