@@ -35,7 +35,7 @@ default definitions do not yield the expected values for a given `model` type. I
 additionally may be overloaded to avoid redundant computation if `model`'s loss
 function computes soft labels as an intermediate result.
 """
-function loss_and_prediction_and_votes(classifier::FluxClassifier)
+function loss_and_prediction_and_votes(model)
     batch = try
         first(_test_batches)
     catch e
@@ -48,19 +48,19 @@ function loss_and_prediction_and_votes(classifier::FluxClassifier)
         @error "error taking _votes_indices" exception=(e, catch_backtrace())
         return nothing
     end
-    Flux.testmode!(classifier.model)
-    l, preds = loss_and_prediction(classifier.model, batch...)
+    Flux.testmode!(model)
+    l, preds = loss_and_prediction(model, batch...)
     return (l, preds, votes)
 end
 
 function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier)
-    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model) for p in classifier.pids)
+    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.pids)
     return_channel = remotecall_fetch_all(shards)
     results = Dict{Int,Any}( take!(return_channel) for _ in shards )
     return [results[p] for p in classifier.pids if results[p] !== nothing ]
 end
 
-function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
+function loss_and_gradient(model, logger::RemoteChannel)
     batch = try
         first(_training_batches)
     catch e
@@ -69,8 +69,8 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
     end
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
-        f = () -> loss(classifier.model, batch...)
-        weights = Zygote.Params(Flux.params(classifier.model))
+        f = () -> loss(model, batch...)
+        weights = Zygote.Params(Flux.params(model))
         return Zygote.pullback(f, weights)
     end
     log_value!(logger, "train/loss_per_batch", train_loss)
@@ -78,11 +78,12 @@ function loss_and_gradient(classifier::FluxClassifier, logger::RemoteChannel)
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
+    @show train_loss
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
 function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel)
-    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model, logger) for p in classifier.pids)
+    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.pids)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
     for _ in 1:length(shards)
