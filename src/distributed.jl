@@ -1,5 +1,5 @@
 struct DistributedFluxClassifier <: AbstractFluxClassifier
-    pids::AbstractVector{Int}
+    workerpool::AbstractWorkerPool
     model::FluxClassifier
 end
 
@@ -54,10 +54,10 @@ function loss_and_prediction_and_votes(model)
 end
 
 function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier)
-    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.pids)
+    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     results = Dict{Int,Any}( take!(return_channel) for _ in shards )
-    return [results[p] for p in classifier.pids if results[p] !== nothing ]
+    return [results[p] for p in classifier.workerpool.workers if haskey(results, p) && results[p] !== nothing ]
 end
 
 function loss_and_gradient(model, logger::RemoteChannel)
@@ -81,21 +81,28 @@ function loss_and_gradient(model, logger::RemoteChannel)
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel)
-    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.pids)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=42.0)
+    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
-    for _ in 1:length(shards)
-        p, r = take!(return_channel)
-        if r !== nothing && eltype(r[2]) != Nothing
-            loss, grad = r
-            if train_loss === nothing
-                train_loss, gradients = loss, grad
-            else
-                train_loss += loss
-                count += 1.0
-                map(+, gradients, grad)
+    for (pid, _) in shards
+        status = timedwait(() -> isready(return_channel), timeout_secs)
+        if status == :ok
+            p, r = take!(return_channel)
+            if r !== nothing && eltype(r[2]) != Nothing
+                loss, grad = r
+                if train_loss === nothing
+                    train_loss, gradients = loss, grad
+                else
+                    train_loss += loss
+                    count += 1.0
+                    map(+, gradients, grad)
+                end
             end
+        else
+            @warn "worker w/ pid $pid unresponsive, removing from worker pool, continuing tick without its batch data."
+            rmprocs(pid; waitfor=1)
+            classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
         end
     end
     # train_loss /= count

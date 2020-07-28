@@ -1,3 +1,4 @@
+const FLUSH_STRING = "__flush__"
 
 """
     DistributedLogger(archive_path::String)
@@ -21,10 +22,13 @@ struct DistributedLogger
         unarchived = Dict{String, Vector{Any}}()
         handler = @async while true
             field, value = take!(inbox)
-            push!(get!(() -> Any[], logged, field), value)
-            push!(get!(() -> Any[], unarchived, field), value)
-            put!(outbox, field => value)
-            if rand(Float32) < 0.00042 && Base.summarysize(unarchived) > 1e7 # once in a while...
+            flush = field == FLUSH_STRING && value === nothing
+            if !flush
+                push!(get!(() -> Any[], logged, field), value)
+                push!(get!(() -> Any[], unarchived, field), value)
+                put!(outbox, field => value)
+            end
+            if flush || (rand(Float32) < 0.00042 && Base.summarysize(unarchived) > 1e7) # once in a while...
                 n = length(readdir(archive_path)) + 1
                 bson(joinpath(archive_path, "$n.bson"), unarchived)
                 empty!(unarchived)
@@ -35,6 +39,11 @@ struct DistributedLogger
     end
 end
 
+# ARRRRRRR none of these type be mine
+function Base.flush(logger::RemoteChannel{Channel{Pair{String,Any}}})
+    put!(logger, FLUSH_STRING => nothing)
+end
+
 function Base.close(logger::DistributedLogger)
     n = length(readdir(logger.archive_path)) + 1
     bson(joinpath(logger.archive_path, "$n.bson"), logger.logged)
@@ -43,7 +52,7 @@ function Base.close(logger::DistributedLogger)
 end
 
 # poached from ParallelDataTransfer.jl
-function sendto(ps::AbstractVector{Int}; args...)
+function sendto(ps::Union{Set{Int}, AbstractVector{Int}}; args...)
     for (nm, val) in args, p in ps
         @spawnat(p, Core.eval(Main, Expr(:(=), nm, val)))
     end
@@ -55,7 +64,7 @@ end
 Construct a `DistributedLogger` and send its inbox to `ps` remote pids as symbol `Main.log_channel`,
 so that remote workers can `put!(log_channel, field => value)`
 """
-function DistributedLogger(ps::AbstractVector{Int}, archive_path::String, inbox_size=8192, outbox_size=8192)
+function DistributedLogger(ps::Union{Set{Int}, AbstractVector{Int}}, archive_path::String, inbox_size=8192, outbox_size=8192)
     logger = DistributedLogger(archive_path, inbox_size)
     sendto(ps; log_channel=logger.inbox)
     return logger

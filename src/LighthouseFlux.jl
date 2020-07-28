@@ -25,6 +25,6 @@ include("optimiser.jl")
 
 export FluxClassifier, DistributedLogger, DistributedFluxClassifier
 
-export @defineat, buffered_batch_loader
+export @defineat, sendto,  buffered_batch_loader
 
 end # module
