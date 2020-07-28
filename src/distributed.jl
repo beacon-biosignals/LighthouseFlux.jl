@@ -145,10 +145,10 @@ function reindex(nope::Nothing, w)
     return Zygote.Grads(grads, w)
 end
 
-function reindex(g::Zygote.Grads, w)
+function reindex(g::Vector, w)
     grads = IdDict()
-    for (gp, wp) in zip(g.params, w)
-        grads[wp] = g[gp]
+    for (gp, wp) in zip(g, w)
+        grads[wp] = gp
     end
     return Zygote.Grads(grads, w)
 end
