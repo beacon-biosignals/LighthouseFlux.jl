@@ -137,10 +137,10 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
     return train_loss, reindex(gradients, weights)
 end
 
-function reindex(g::Vector, w)
+function reindex(nope::Nothing, w)
     grads = IdDict()
-    for (gp, wp) in zip(g, w)
-        grads[wp] = gp
+    for wp in w
+        grads[wp] = zero(wp)
     end
     return Zygote.Grads(grads, w)
 end
