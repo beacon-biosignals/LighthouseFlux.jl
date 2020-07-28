@@ -53,10 +53,26 @@ function loss_and_prediction_and_votes(model)
     return (l, preds, votes)
 end
 
-function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier)
+function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; timeout_sec=42.0)
     shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
-    results = Dict{Int,Any}( take!(return_channel) for _ in shards )
+    results = Dict{Int,Any}()
+    for (pid, _) in shards
+        status = timedwait(() -> isready(return_channel), timeout_secs)
+        if status == :ok
+            p, r = take!(return_channel)
+            results[pid] = r
+        else
+            @warn "worker w/ pid $pid unresponsive in loss_and_prediction, removing from worker pool, continuing tick without its batch data."
+            classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
+            @async try
+                rmprocs(pid; waitfor=1)
+            catch
+                rmprocs(pid; waitfor=1)
+                nothing
+            end
+        end
+    end
     return [results[p] for p in classifier.workerpool.workers if haskey(results, p) && results[p] !== nothing ]
 end
 
@@ -100,9 +116,14 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
                 end
             end
         else
-            @warn "worker w/ pid $pid unresponsive, removing from worker pool, continuing tick without its batch data."
-            rmprocs(pid; waitfor=1)
+            @warn "worker w/ pid $pid unresponsive in loss_and_gradient, removing from worker pool, continuing tick without its batch data."
             classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
+            @async try
+                rmprocs(pid; waitfor=1)
+            catch
+                rmprocs(pid; waitfor=1)
+                nothing
+            end
         end
     end
     # train_loss /= count
