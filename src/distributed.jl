@@ -81,7 +81,7 @@ function loss_and_gradient(model, logger::RemoteChannel)
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=42.0)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=120.0)
     shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
