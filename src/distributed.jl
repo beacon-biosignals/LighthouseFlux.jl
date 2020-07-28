@@ -53,7 +53,7 @@ function loss_and_prediction_and_votes(model)
     return (l, preds, votes)
 end
 
-function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; timeout_sec=42.0)
+function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; timeout_secs=42.0)
     shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     results = Dict{Int,Any}()
