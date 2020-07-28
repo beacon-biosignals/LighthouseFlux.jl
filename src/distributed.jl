@@ -101,7 +101,11 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
             end
         else
             @warn "worker w/ pid $pid unresponsive, removing from worker pool, continuing tick without its batch data."
-            rmprocs(pid; waitfor=1)
+            try
+                rmprocs(pid; waitfor=10)
+            catch
+                nothing
+            end
             classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
         end
     end
