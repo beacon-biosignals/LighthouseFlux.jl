@@ -7,7 +7,7 @@ end
 
 (m::TestModel)(X) = m.chain(X)
 
-Flux.@treelike TestModel (chain,)
+Flux.@functor TestModel (chain,)
 
 function LighthouseFlux.loss(m::TestModel, input_feature_batch, soft_label_batch)
     return Flux.mse(m(input_feature_batch), soft_label_batch)

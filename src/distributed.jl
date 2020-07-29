@@ -53,10 +53,31 @@ function loss_and_prediction_and_votes(model)
     return (l, preds, votes)
 end
 
-function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier)
+function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; timeout_secs=42.0)
     shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
-    results = Dict{Int,Any}( take!(return_channel) for _ in shards )
+    results = Dict{Int,Any}()
+    for (pid, _) in shards
+        status = timedwait(() -> isready(return_channel), timeout_secs)
+        if status == :ok
+            p, r = take!(return_channel)
+            results[pid] = r
+        else
+            pids = Set(keys(results))
+            unresponsive = setdiff(classifier.workerpool.workers, pids)
+            @warn "workers $unresponsive unresponsive, removing from worker pool, continuing tick without their batch data."
+            classifier.workerpool.workers = pids
+            for p in unresponsive
+                @async try
+                    rmprocs(p; waitfor=1)
+                catch
+                    rmprocs(p; waitfor=1)
+                    nothing
+                    # XXX call ClusterMangers kill
+                end
+            end
+        end
+    end
     return [results[p] for p in classifier.workerpool.workers if haskey(results, p) && results[p] !== nothing ]
 end
 
@@ -81,14 +102,16 @@ function loss_and_gradient(model, logger::RemoteChannel)
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=120.0)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=180.0)
     shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
+    pids = []
     for (pid, _) in shards
         status = timedwait(() -> isready(return_channel), timeout_secs)
         if status == :ok
             p, r = take!(return_channel)
+            push!(pids, pid)
             if r !== nothing && eltype(r[2]) != Nothing
                 loss, grad = r
                 if train_loss === nothing
@@ -100,13 +123,19 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
                 end
             end
         else
-            @warn "worker w/ pid $pid unresponsive, removing from worker pool, continuing tick without its batch data."
-            try
-                rmprocs(pid; waitfor=10)
-            catch
-                nothing
+            pids = Set(pids)
+            unresponsive = setdiff(classifier.workerpool.workers, pids)
+            @warn "workers $unresponsive unresponsive, removing from worker pool, continuing tick without their batch data."
+            classifier.workerpool.workers = pids
+            for p in unresponsive
+                @async try
+                    rmprocs(p; waitfor=1)
+                catch
+                    rmprocs(p; waitfor=1)
+                    nothing
+                    # XXX call ClusterMangers kill
+                end
             end
-            classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
         end
     end
     # train_loss /= count
@@ -115,18 +144,18 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
     return train_loss, reindex(gradients, weights)
 end
 
-function reindex(g::Vector, w)
+function reindex(nope::Nothing, w)
     grads = IdDict()
-    for (gp, wp) in zip(g, w)
-        grads[wp] = gp
+    for wp in w
+        grads[wp] = zero(wp)
     end
     return Zygote.Grads(grads, w)
 end
 
-function reindex(g::Zygote.Grads, w)
+function reindex(g::Vector, w)
     grads = IdDict()
-    for (gp, wp) in zip(g.params, w)
-        grads[wp] = g[gp]
+    for (gp, wp) in zip(g, w)
+        grads[wp] = gp
     end
     return Zygote.Grads(grads, w)
 end

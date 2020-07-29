@@ -13,9 +13,9 @@ before_script:
   - julia --color=yes --project= -e 'using Pkg; Pkg.update()'  # Install General
   - git clone git@github.com:beacon-biosignals/BeaconRegistry.git ~/.julia/registries/Beacon
 # uncomment the following lines to override the default test script
-#script:
-#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-#  - julia -e 'Pkg.clone(pwd()); Pkg.build("LighthouseFlux"); Pkg.test("LighthouseFlux"; coverage=true)'
+script:
+ - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+ - travis_wait julia -e 'using Pkg; Pkg.build("LighthouseFlux"); Pkg.test("LighthouseFlux"; coverage=true)'
 codecov: true
 after_success:
   - docs/build.sh
