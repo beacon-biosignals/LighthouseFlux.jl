@@ -63,13 +63,18 @@ function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; ti
             p, r = take!(return_channel)
             results[pid] = r
         else
-            @warn "worker w/ pid $pid unresponsive in loss_and_prediction, removing from worker pool, continuing tick without its batch data."
-            classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
-            @async try
-                rmprocs(pid; waitfor=1)
-            catch
-                rmprocs(pid; waitfor=1)
-                nothing
+            pids = Set(keys(results))
+            unresponsive = setdiff(classifier.workerpool.workers, pids)
+            @warn "workers $unresponsive unresponsive, removing from worker pool, continuing tick without their batch data."
+            classifier.workerpool.workers = pids
+            for p in unresponsive
+                @async try
+                    rmprocs(p; waitfor=1)
+                catch
+                    rmprocs(p; waitfor=1)
+                    nothing
+                    # XXX call ClusterMangers kill
+                end
             end
         end
     end
@@ -97,14 +102,16 @@ function loss_and_gradient(model, logger::RemoteChannel)
     return (train_loss, [gradients[p] for p in gradients.params])
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=20.0)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=180.0)
     shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
+    pids = []
     for (pid, _) in shards
         status = timedwait(() -> isready(return_channel), timeout_secs)
         if status == :ok
             p, r = take!(return_channel)
+            push!(pids, pid)
             if r !== nothing && eltype(r[2]) != Nothing
                 loss, grad = r
                 if train_loss === nothing
@@ -116,14 +123,18 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
                 end
             end
         else
-            @warn "worker w/ pid $pid unresponsive, removing from worker pool, continuing tick without its batch data."
-            classifier.workerpool.workers = setdiff(classifier.workerpool.workers, Set(pid))
-            @async try
-                rmprocs(pid; waitfor=1)
-            catch
-                rmprocs(pid; waitfor=1)
-                nothing
-                # XXX call ClusterMangers kill
+            pids = Set(pids)
+            unresponsive = setdiff(classifier.workerpool.workers, pids)
+            @warn "workers $unresponsive unresponsive, removing from worker pool, continuing tick without their batch data."
+            classifier.workerpool.workers = pids
+            for p in unresponsive
+                @async try
+                    rmprocs(p; waitfor=1)
+                catch
+                    rmprocs(p; waitfor=1)
+                    nothing
+                    # XXX call ClusterMangers kill
+                end
             end
         end
     end
