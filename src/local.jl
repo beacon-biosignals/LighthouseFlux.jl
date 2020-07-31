@@ -107,7 +107,7 @@ model(classifier::FluxClassifier) = classifier.model
 params(classifier::FluxClassifier) = classifier.params
 optimizer(classifier::FluxClassifier) = classifier.optimiser
 
-function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logger::Lighthouse.LearnLogger)
+function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logger)
     batch = assemble_batch(batchspec)
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
@@ -119,6 +119,7 @@ function loss_and_gradient(classifier::FluxClassifier, weights, batchspec, logge
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
+    @show train_loss
     return train_loss, gradients
 end
 
