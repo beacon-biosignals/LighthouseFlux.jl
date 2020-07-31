@@ -12,19 +12,17 @@ struct DistributedLogger
     archive_path::String
     inbox::RemoteChannel{Channel{Pair{String,Any}}}
     outbox::RemoteChannel{Channel{Pair{String,Any}}}
-    logged::Dict{String, Vector{Any}}
+    unarchived::Dict{String, Vector{Any}}
     handler::Task
-    function DistributedLogger(archive_path::String, inbox_size::Int=8192, outbox_size::Int=8192)
+    function DistributedLogger(archive_path::String, inbox_size::Int=42, outbox_size::Int=42)
         mkpath(archive_path)
         inbox = RemoteChannel(() -> Channel{Pair{String,Any}}(inbox_size))
         outbox = RemoteChannel(() -> Channel{Pair{String,Any}}(outbox_size))
-        logged = Dict{String, Vector{Any}}()
         unarchived = Dict{String, Vector{Any}}()
         handler = @async while true
             field, value = take!(inbox)
             flush = field == FLUSH_STRING && value === nothing
             if !flush
-                push!(get!(() -> Any[], logged, field), value)
                 push!(get!(() -> Any[], unarchived, field), value)
                 put!(outbox, field => value)
             end
@@ -35,7 +33,7 @@ struct DistributedLogger
                 rm(joinpath(archive_path, "tmp.bson"), force=true)
             end
         end
-        return new(archive_path, inbox, outbox, logged, handler)
+        return new(archive_path, inbox, outbox, unarchived, handler)
     end
 end
 
@@ -46,7 +44,7 @@ end
 
 function Base.close(logger::DistributedLogger)
     n = length(readdir(logger.archive_path)) + 1
-    bson(joinpath(logger.archive_path, "$n.bson"), logger.logged)
+    bson(joinpath(logger.archive_path, "$n.bson"), logger.unarchived)
     close(logger.inbox)
     close(logger.outbox)
 end
