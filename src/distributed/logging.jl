@@ -139,7 +139,7 @@ end
 
 # Int in MiB
 function gpu_memory_free()
-   s = read(`nvidia-smi --query-gpu=memory.free--format=csv,noheader,nounits`, String)
+   s = read(`nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits`, String)
    return parse(Int, s)
 end
 
