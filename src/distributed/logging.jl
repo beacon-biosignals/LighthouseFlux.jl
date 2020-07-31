@@ -127,3 +127,19 @@ function read_log_archive(archive_path::String)
     return logged
 end
 
+###
+### utils
+###
+
+# Int in MiB
+function gpu_memory_used()
+   s = read(`nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits`, String)
+   return parse(Int, s)
+end
+
+# Int in MiB
+function gpu_memory_free()
+   s = read(`nvidia-smi --query-gpu=memory.free--format=csv,noheader,nounits`, String)
+   return parse(Int, s)
+end
+
