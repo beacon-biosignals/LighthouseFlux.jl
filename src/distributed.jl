@@ -36,16 +36,10 @@ additionally may be overloaded to avoid redundant computation if `model`'s loss
 function computes soft labels as an intermediate result.
 """
 function loss_and_prediction_and_votes(model)
-    batch = try
+    batch, votes = try
         first(_test_batches)
     catch e
         @error "error taking _test_batches" exception=(e, catch_backtrace())
-        return nothing
-    end
-    votes = try
-        take!(_votes_indices_channel)
-    catch e
-        @error "error taking _votes_indices" exception=(e, catch_backtrace())
         return nothing
     end
     Flux.testmode!(model)
@@ -61,7 +55,7 @@ function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; ti
         status = timedwait(() -> isready(return_channel), timeout_secs)
         if status == :ok
             p, r = take!(return_channel)
-            results[pid] = r
+            results[p] = r
         else
             pids = Set(keys(results))
             unresponsive = setdiff(classifier.workerpool.workers, pids)
@@ -78,7 +72,7 @@ function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; ti
             end
         end
     end
-    return [results[p] for p in classifier.workerpool.workers if haskey(results, p) && results[p] !== nothing ]
+    return [results[p] for p in sort(collect(classifier.workerpool.workers)) if haskey(results, p) && results[p] !== nothing ]
 end
 
 function loss_and_gradient(model, logger::RemoteChannel)
