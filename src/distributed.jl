@@ -36,14 +36,18 @@ additionally may be overloaded to avoid redundant computation if `model`'s loss
 function computes soft labels as an intermediate result.
 """
 function loss_and_prediction_and_votes(model)
+    for (dst, src) in zip(_model_params, Zygote.Params(Flux.params(model)))
+        copyto!(dst, src)
+    end
     batch, votes = try
         first(_test_batches)
     catch e
         @error "error taking _test_batches" exception=(e, catch_backtrace())
         return nothing
     end
-    Flux.testmode!(model)
-    l, preds = loss_and_prediction(model, batch...)
+    _model = Flux.gpu(_model)
+    Flux.testmode!(_model)
+    l, preds = loss_and_prediction(_model, batch...)
     return (l, preds, votes)
 end
 
@@ -76,28 +80,32 @@ function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; ti
 end
 
 function loss_and_gradient(model, logger::RemoteChannel)
+    #model_params = Zygote.Params(Flux.params(_model))
+    for (dst, src) in zip(_model_params, Zygote.Params(Flux.params(model)))
+        copyto!(dst, src)
+    end
     batch = try
         first(_training_batches)
     catch e
         @error "loss_and_gradient on worker" exception=(e, catch_backtrace())
         return nothing
     end
+    _model = Flux.gpu(_model)
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
-        f = () -> loss(model, batch...)
-        weights = Zygote.Params(Flux.params(model))
-        return Zygote.pullback(f, weights)
+        f = () -> loss(_model, batch...)
+        return Zygote.pullback(f, _model_params) # Zygote.Params(Flux.params(_model)))
     end
     log_value!(logger, "train/loss_per_batch", train_loss)
     gradients = log_resource_info!(logger, "train/reverse_pass";
                                    suffix="_per_batch") do
         return back(Zygote.sensitivity(train_loss))
     end
-    return (train_loss, [gradients[p] for p in gradients.params])
+    return (train_loss, [Flux.cpu(gradients[p]) for p in gradients.params])
 end
 
 function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=180.0)
-    shards = Dict{Int,Any}( p => (loss_and_gradient, classifier.model.model, logger) for p in classifier.workerpool.workers)
+    shards = Dict{Int,Any}( p => (loss_and_gradient, Flux.cpu(classifier.model.model), logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0
     pids = []
@@ -105,6 +113,7 @@ function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, lo
         status = timedwait(() -> isready(return_channel), timeout_secs)
         if status == :ok
             p, r = take!(return_channel)
+            # @show p, r
             push!(pids, pid)
             if r !== nothing && eltype(r[2]) != Nothing
                 loss, grad = r

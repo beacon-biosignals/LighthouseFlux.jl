@@ -4,6 +4,7 @@ function buffered_batch_loader(batchspecs, batch_assembler; buffer_size=2)
     return Channel(buffer_size) do channel
         future_buffer = Channel(buffer_size) # using this channel as a blocking glorified FIFO / circular buffer..
         for i in 1:buffer_size
+            # @show typeof(batchspecs[i])
             put!(future_buffer, @async batch_assembler(batchspecs[i]...))
         end
         try

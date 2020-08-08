@@ -133,10 +133,21 @@ function Lighthouse.train!(classifier::AbstractFluxClassifier, batches, logger)
     @info "Starting train! loop"
     for batch in batches
         train_loss, gradients = loss_and_gradient(classifier, weights, batch, logger)
+        # for (i,p) in enumerate(gradients.params)
+        #     @show (i, norm(gradients[p]), size(p))
+        # end
+        # @info "before"
+        # for (i,w) in enumerate(weights.order.data)
+        #     @show (i, norm(w), size(w))
+        # end
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
             Flux.Optimise.update!(optimizer(classifier), weights, gradients)
             return nothing
         end
+        # @info "after"
+        # for (i,w) in enumerate(weights.order.data)
+        #     @show (i, norm(w), size(w))
+        # end
     end
     Flux.testmode!(LighthouseFlux.model(classifier))
     return nothing
