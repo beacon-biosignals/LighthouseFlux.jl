@@ -45,7 +45,6 @@ function loss_and_prediction_and_votes(model)
         @error "error taking _test_batches" exception=(e, catch_backtrace())
         return nothing
     end
-    _model = Flux.gpu(_model)
     Flux.testmode!(_model)
     l, preds = loss_and_prediction(_model, batch...)
     return (l, preds, votes)
@@ -80,7 +79,6 @@ function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; ti
 end
 
 function loss_and_gradient(model, logger::RemoteChannel)
-    #model_params = Zygote.Params(Flux.params(_model))
     for (dst, src) in zip(_model_params, Zygote.Params(Flux.params(model)))
         copyto!(dst, src)
     end
@@ -90,11 +88,10 @@ function loss_and_gradient(model, logger::RemoteChannel)
         @error "loss_and_gradient on worker" exception=(e, catch_backtrace())
         return nothing
     end
-    _model = Flux.gpu(_model)
     train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                           suffix="_per_batch") do
         f = () -> loss(_model, batch...)
-        return Zygote.pullback(f, _model_params) # Zygote.Params(Flux.params(_model)))
+        return Zygote.pullback(f, _model_params)
     end
     log_value!(logger, "train/loss_per_batch", train_loss)
     gradients = log_resource_info!(logger, "train/reverse_pass";
