@@ -51,37 +51,53 @@ function loss_and_prediction_and_votes(model)
 end
 
 function loss_and_prediction_and_votes(classifier::DistributedFluxClassifier; timeout_secs=42.0)
-    shards = Dict{Int,Any}( p => (loss_and_prediction_and_votes, classifier.model.model) for p in classifier.workerpool.workers)
-    return_channel = remotecall_fetch_all(shards)
-    results = Dict{Int,Any}()
-    for (pid, _) in shards
-        status = timedwait(() -> isready(return_channel), timeout_secs)
-        if status == :ok
-            p, r = take!(return_channel)
-            results[p] = r
-        else
-            pids = Set(keys(results))
-            unresponsive = setdiff(classifier.workerpool.workers, pids)
-            @warn "workers $unresponsive unresponsive, removing from worker pool, continuing tick without their batch data."
-            classifier.workerpool.workers = pids
-            for p in unresponsive
-                @async try
-                    rmprocs(p; waitfor=1)
-                catch
-                    rmprocs(p; waitfor=1)
-                    nothing
-                    # XXX call ClusterMangers kill
-                end
+    model_push!(classifier, :test; timeout_secs=timeout_secs)
+    Channel(42) do channel
+        try
+            remote_channel = RemoteChannel(() -> channel)
+            asyncmap(collect(classifier.workerpool)) do p
+                Distributed.remotecall_eval(LighthouseFlux, p, quote
+                    _predictions = $remote_channel
+                    for (test_batch, votes_indices) in _test_batches
+                        l, preds = loss_and_prediction(_model, test_batch...)
+                        put!(_predictions, (l, preds, votes_indices))
+                    end
+                end)
             end
+        catch e
+            @error "error pushing predictions to _predictions" exception=(e, catch_backtrace())
         end
     end
-    return [results[p] for p in sort(collect(classifier.workerpool.workers)) if haskey(results, p) && results[p] !== nothing ]
 end
 
-function loss_and_gradient(model, logger::RemoteChannel)
+function model_update!(model, trainmode)
     for (dst, src) in zip(_model_params, Zygote.Params(Flux.params(model)))
         copyto!(dst, src)
     end
+    if mode == :train
+        Flux.trainmode!(_model)
+    elseif mode == :test
+        Flux.testmode!(_model)
+    else
+        error("unknown model mode $mode not in [:train, :test]")
+    end
+    return nothing
+end
+
+function model_push!(model::DistributedFluxClassifier, mode; timeout_secs=42.0)
+    mode ∉ [:train, test] && error("unknown model mode $mode not in [:train, :test]")
+    shards = Dict{Int,Any}( p => (model_update!, Flux.cpu(classifier.model.model), mode) for p in classifier.workerpool.workers)
+    return_channel = remotecall_fetch_all(shards)
+    asyncmap(shards) do (pid, _)
+        status = timedwait(() -> isready(return_channel), timeout_secs)
+        if status != :ok
+            @warn "timeout pushing model to pid $pid !!!"
+        end
+    end
+end
+
+function loss_and_gradient(model, logger::RemoteChannel)
+    model_push!(model, :train)
     batch = try
         first(_training_batches)
     catch e
@@ -101,7 +117,7 @@ function loss_and_gradient(model, logger::RemoteChannel)
     return (train_loss, [Flux.cpu(gradients[p]) for p in gradients.params])
 end
 
-function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=180.0)
+function loss_and_gradient(classifier::DistributedFluxClassifier, weights, b, logger::RemoteChannel; timeout_secs=42.0)
     shards = Dict{Int,Any}( p => (loss_and_gradient, Flux.cpu(classifier.model.model), logger) for p in classifier.workerpool.workers)
     return_channel = remotecall_fetch_all(shards)
     train_loss, gradients, count = nothing, nothing, 0.0

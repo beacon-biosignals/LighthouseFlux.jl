@@ -24,3 +24,32 @@ macro defineat(pids,ex,mod=Main)
         end
     end
 end
+
+remotecall_channel(f, l, wp::AbstractWorkerPool, mod::Module=Main, size=2) = remotecall_channel(f, l, collect(wp.workers), mod; size=size)
+
+function remotecall_channel(f, l, pids::AbstractVector{Int}=[1]; mod::Module=Main, size=2)
+    inbox = RemoteChannel(() -> Channel(size) do c
+        foreach(x -> put!(c, x), l)
+    end)
+    Channel(size) do channel
+        try
+            outbox = RemoteChannel(() -> channel)
+            asyncmap(pids) do p
+                Distributed.remotecall_eval(mod, p, quote
+                    while true
+                        try
+                            x = take!($inbox)
+                            put!($outbox, $f(x...))
+                        catch e
+                            (isa(e, InvalidStateException) || (isa(e, Distributed.RemoteException) && isa(e.captured.ex, InvalidStateException))) && return
+                            throw(e)
+                        end
+                    end
+                end)
+            end
+        catch e
+            @error "error in remotecall_channel" exception=(e, catch_backtrace())
+        end
+    end
+end
+
