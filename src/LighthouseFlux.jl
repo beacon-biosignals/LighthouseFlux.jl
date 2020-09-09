@@ -16,14 +16,13 @@ include("local.jl")
 
 # everything in `distributed/` should go somewhere else, it has nothing to do with Lighthouse of Flux
 include("distributed/dataloader.jl")
-include("distributed/logging.jl")
 include("distributed/sharding.jl")
 
 include("distributed.jl")
 
 include("optimiser.jl")
 
-export FluxClassifier, DistributedLogger, DistributedFluxClassifier
+export FluxClassifier, DistributedFluxClassifier
 
 export @defineat, remotecall_channel, sendto,  buffered_batch_loader
 
