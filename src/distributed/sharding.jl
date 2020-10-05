@@ -27,7 +27,7 @@ end
 
 remotecall_channel(f, l, wp::AbstractWorkerPool, mod::Module=Main, size=2) = remotecall_channel(f, l, collect(wp.workers), mod; size=size)
 
-function remotecall_channel(f, l, pids::AbstractVector{Int}=[1]; mod::Module=Main, size=2)
+function remotecall_channel(f, l, pids::AbstractVector{Int}=[1]; mod::Module=Main, size=2, gc_every=420)
     inbox = RemoteChannel(() -> Channel(size) do c
         foreach(x -> put!(c, x), l)
     end)
@@ -36,10 +36,13 @@ function remotecall_channel(f, l, pids::AbstractVector{Int}=[1]; mod::Module=Mai
             outbox = RemoteChannel(() -> channel)
             asyncmap(pids) do p
                 Distributed.remotecall_eval(mod, p, quote
+                    local count = 1
                     while true
                         try
                             x = take!($inbox)
                             put!($outbox, $f(x...))
+                            count += 1
+                            (count % $gc_every < 2) && GC.gc()  # twice
                         catch e
                             (isa(e, InvalidStateException) || (isa(e, Distributed.RemoteException) && isa(e.captured.ex, InvalidStateException))) && return
                             throw(e)
