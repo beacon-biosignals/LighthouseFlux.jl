@@ -1,6 +1,11 @@
 using Test, Random
 using LighthouseFlux, Lighthouse, Flux
 
+# Set up plotting backend for Plots.jl (GR)
+using Lighthouse.Plots
+gr()
+GR.inline("png")
+
 mutable struct TestModel
     chain::Chain
 end
