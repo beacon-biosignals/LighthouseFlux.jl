@@ -18,21 +18,23 @@ end
         rng = MersenneTwister(43)
         classes = ["class_$i" for i in 1:5]
         c, n = 5, 3
-        model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
-                                Dense(2*c, c, initW=ones, initb=zeros),
-                                softmax))
+        model = TestModel(Chain(Dense(4 * c, 2 * c; initW=ones, initb=zeros),
+                                Dense(2 * c, c; initW=ones, initb=zeros), softmax))
         # assure that `testmode!` and `trainmode!` is being utilized correctly after training
-        test_input = rand(MersenneTwister(42), Float32, 4*c) # get test input
+        test_input = rand(MersenneTwister(42), Float32, 4 * c) # get test input
         y_pretrained = model(test_input) # test model output before being trained
         classifier = FluxClassifier(model, ADAM(0.1), classes)
-        train_batches = [(rand(rng, 4*c, n), rand(rng, 1, n)) for _ in 1:100]
-        test_batches = [((rand(rng, 4*c, n), rand(rng, 1, n)), (n*i - n + 1):(n*i)) for i in 1:10]
+        train_batches = [(rand(rng, 4 * c, n), rand(rng, 1, n)) for _ in 1:100]
+        test_batches = [((rand(rng, 4 * c, n), rand(rng, 1, n)), (n * i - n + 1):(n * i))
+                        for i in 1:10]
         possible_vote_labels = collect(0:length(classes))
-        votes = [rand(rng, possible_vote_labels) for sample in 1:(n*10), voter in 1:7]
+        votes = [rand(rng, possible_vote_labels) for sample in 1:(n * 10), voter in 1:7]
         logger = Lighthouse.LearnLogger(joinpath(tmpdir, "logs"), "test_run")
         limit = 5
         let counted = 0
-            upon_loss_decrease = Lighthouse.upon(logger, "test_set_prediction/mean_loss_per_epoch"; condition=<, initial=Inf)
+            upon_loss_decrease = Lighthouse.upon(logger,
+                                                 "test_set_prediction/mean_loss_per_epoch";
+                                                 condition=<, initial=Inf)
             callback = n -> begin
                 upon_loss_decrease() do _
                     counted += n
@@ -45,33 +47,39 @@ end
             # since the loss happens to actually "improve" on the random data each epoch
             @test counted == sum(1:limit)
         end
-        for key in ["train/loss_per_batch"
-                    "train/forward_pass/time_in_seconds_per_batch"
-                    "train/forward_pass/gc_time_in_seconds_per_batch"
-                    "train/forward_pass/allocations_per_batch"
-                    "train/forward_pass/memory_in_mb_per_batch"
-                    "train/reverse_pass/time_in_seconds_per_batch"
-                    "train/reverse_pass/gc_time_in_seconds_per_batch"
-                    "train/reverse_pass/allocations_per_batch"
-                    "train/reverse_pass/memory_in_mb_per_batch"
-                    "train/update/time_in_seconds_per_batch"
-                    "train/update/gc_time_in_seconds_per_batch"
-                    "train/update/allocations_per_batch"
-                    "train/update/memory_in_mb_per_batch"]
-            @test length(logger.logged[key]) == length(train_batches)*limit
+        for key in [
+            "train/loss_per_batch"
+            "train/forward_pass/time_in_seconds_per_batch"
+            "train/forward_pass/gc_time_in_seconds_per_batch"
+            "train/forward_pass/allocations_per_batch"
+            "train/forward_pass/memory_in_mb_per_batch"
+            "train/reverse_pass/time_in_seconds_per_batch"
+            "train/reverse_pass/gc_time_in_seconds_per_batch"
+            "train/reverse_pass/allocations_per_batch"
+            "train/reverse_pass/memory_in_mb_per_batch"
+            "train/update/time_in_seconds_per_batch"
+            "train/update/gc_time_in_seconds_per_batch"
+            "train/update/allocations_per_batch"
+            "train/update/memory_in_mb_per_batch"
+        ]
+            @test length(logger.logged[key]) == length(train_batches) * limit
         end
-        for key in ["test_set_prediction/loss_per_batch"
-                    "test_set_prediction/time_in_seconds_per_batch"
-                    "test_set_prediction/gc_time_in_seconds_per_batch"
-                    "test_set_prediction/allocations_per_batch"
-                    "test_set_prediction/memory_in_mb_per_batch"]
-            @test length(logger.logged[key]) == length(test_batches)*limit
+        for key in [
+            "test_set_prediction/loss_per_batch"
+            "test_set_prediction/time_in_seconds_per_batch"
+            "test_set_prediction/gc_time_in_seconds_per_batch"
+            "test_set_prediction/allocations_per_batch"
+            "test_set_prediction/memory_in_mb_per_batch"
+        ]
+            @test length(logger.logged[key]) == length(test_batches) * limit
         end
-        for key in ["test_set_prediction/mean_loss_per_epoch"
-                    "test_set_evaluation/time_in_seconds_per_epoch"
-                    "test_set_evaluation/gc_time_in_seconds_per_epoch"
-                    "test_set_evaluation/allocations_per_epoch"
-                    "test_set_evaluation/memory_in_mb_per_epoch"]
+        for key in [
+            "test_set_prediction/mean_loss_per_epoch"
+            "test_set_evaluation/time_in_seconds_per_epoch"
+            "test_set_evaluation/gc_time_in_seconds_per_epoch"
+            "test_set_evaluation/allocations_per_epoch"
+            "test_set_evaluation/memory_in_mb_per_epoch"
+        ]
             @test length(logger.logged[key]) == limit
         end
         @test length(logger.logged["test_set_evaluation/metrics_per_epoch"]) == limit
@@ -83,8 +91,7 @@ end
 
         # test onehot/onecold overloads
         classifier = FluxClassifier(model, ADAM(0.1), classes;
-                                    onehot=(x -> fill(x, length(classes))),
-                                    onecold=sum)
+                                    onehot=(x -> fill(x, length(classes))), onecold=sum)
         @test Lighthouse.onehot(classifier, 3) == fill(3, length(classes))
         @test Lighthouse.onecold(classifier, [0.31, 0.43, 0.13]) == 0.87
     end
@@ -92,13 +99,14 @@ end
 
 @testset "`evaluate_chain_in_debug_mode`" begin
     chain = Chain(Dense(4, 2), Dense(2, 1))
-    input = Float32[1 2 3 4
-                    5 6 7 8
-                    8 7 6 5
-                    4 3 2 1]
-    @test @test_logs((:info, "Executing layer 1 / 2..."),
-                     (:info, (2, 4)),
-                     (:info, "Executing layer 2 / 2..."),
-                     (:info, (1, 4)),
-                     LighthouseFlux.evaluate_chain_in_debug_mode(chain, input)) ≈ chain(input)
+    input = Float32[
+        1 2 3 4
+        5 6 7 8
+        8 7 6 5
+        4 3 2 1
+    ]
+    @test @test_logs((:info, "Executing layer 1 / 2..."), (:info, (2, 4)),
+                     (:info, "Executing layer 2 / 2..."), (:info, (1, 4)),
+                     LighthouseFlux.evaluate_chain_in_debug_mode(chain, input)) ≈
+          chain(input)
 end
