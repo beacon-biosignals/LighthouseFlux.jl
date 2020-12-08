@@ -1,7 +1,7 @@
 name = "LighthouseFlux"
 uuid = "56a5d6c5-c9a8-4db3-ae3d-7c3fdb50c563"
 authors = ["Beacon Biosignals, Inc."]
-version = "0.2.4"
+version = "0.3.0"
 
 [deps]
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
