@@ -46,7 +46,8 @@ value or a value that can be passed to `Zygote.Params`.
 function FluxClassifier(model, optimiser, classes; params=Flux.params(model),
                         onehot=(label -> Flux.onehot(label, 1:length(classes))),
                         onecold=(label -> Flux.onecold(label, 1:length(classes))))
-    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params, onehot, onecold)
+    return FluxClassifier(Flux.testmode!(model), optimiser, classes, params, onehot,
+                          onecold)
 end
 
 """
@@ -104,8 +105,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return Zygote.pullback(f, weights)
         end
         log_value!(logger, "train/loss_per_batch", train_loss)
-        gradients = log_resource_info!(logger, "train/reverse_pass";
-                                       suffix="_per_batch") do
+        gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
@@ -140,7 +140,7 @@ function evaluate_chain_in_debug_mode(chain::Flux.Chain, input)
     for (i, layer) in enumerate(chain)
         @info "Executing layer $i / $(length(chain))..." layer size(input)
         input = layer(input)
-        @info output_size=size(input)
+        @info output_size = size(input)
     end
     return input
 end
