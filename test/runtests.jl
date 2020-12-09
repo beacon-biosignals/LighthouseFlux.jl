@@ -20,7 +20,7 @@ end
 
 @testset "learn!(::TestModel, ...)" begin
     mktempdir() do tmpdir
-        rng = MersenneTwister(43)
+        rng = MersenneTwister(255)
         classes = ["class_$i" for i in 1:5]
         c, n = 5, 3
         model = TestModel(Chain(Dense(4*c, 2*c, initW=ones, initb=zeros),
