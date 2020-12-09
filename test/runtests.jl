@@ -1,6 +1,11 @@
 using Test, Random
 using LighthouseFlux, Lighthouse, Flux
 
+# Set up plotting backend for Plots.jl (GR)
+using Lighthouse.Plots
+gr()
+GR.inline("png")
+
 mutable struct TestModel
     chain::Chain
 end
@@ -15,7 +20,7 @@ end
 
 @testset "learn!(::TestModel, ...)" begin
     mktempdir() do tmpdir
-        rng = MersenneTwister(43)
+        rng = MersenneTwister(255)
         classes = ["class_$i" for i in 1:5]
         c, n = 5, 3
         model = TestModel(Chain(Dense(4 * c, 2 * c; initW=ones, initb=zeros),
