@@ -9,6 +9,7 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TensorBoardLogger = "899adc3e-224a-11e9-021f-63837185c80f"
 
 [compat]

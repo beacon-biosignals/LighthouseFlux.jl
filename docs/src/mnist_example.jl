@@ -75,28 +75,29 @@ end
 
 struct SimpleModel{C}
     chain::C
-    function SimpleModel(; imgsize = (28,28,1), nclasses = 10)
-        cnn_output_size = Int.(floor.([imgsize[1]/8,imgsize[2]/8,32]))	
+end
 
-        chain = Chain(
-        # First convolution, operating upon a 28x28 image
-        Conv((3, 3), imgsize[3]=>16, pad=(1,1), relu),
-        MaxPool((2,2)),
+function SimpleModel(; imgsize = (28,28,1), nclasses = 10)
+    cnn_output_size = Int.(floor.([imgsize[1]/8,imgsize[2]/8,32]))	
 
-        # Second convolution, operating upon a 14x14 image
-        Conv((3, 3), 16=>32, pad=(1,1), relu),
-        MaxPool((2,2)),
+    chain = Chain(
+    # First convolution, operating upon a 28x28 image
+    Conv((3, 3), imgsize[3]=>16, pad=(1,1), relu),
+    MaxPool((2,2)),
 
-        # Third convolution, operating upon a 7x7 image
-        Conv((3, 3), 32=>32, pad=(1,1), relu),
-        MaxPool((2,2)),
+    # Second convolution, operating upon a 14x14 image
+    Conv((3, 3), 16=>32, pad=(1,1), relu),
+    MaxPool((2,2)),
 
-        # Reshape 3d tensor into a 2d one using `Flux.flatten`, at this point it should be (3, 3, 32, N)
-        flatten,
-        Dense(prod(cnn_output_size), 10))
-        chain = gpu(chain)
-        return new{typeof(chain)}(chain)
-    end
+    # Third convolution, operating upon a 7x7 image
+    Conv((3, 3), 32=>32, pad=(1,1), relu),
+    MaxPool((2,2)),
+
+    # Reshape 3d tensor into a 2d one using `Flux.flatten`, at this point it should be (3, 3, 32, N)
+    flatten,
+    Dense(prod(cnn_output_size), 10))
+    chain = gpu(chain)
+    return SimpleModel{typeof(chain)}(chain)
 end
 
 Flux.@functor SimpleModel (chain,)
@@ -120,7 +121,13 @@ function LighthouseFlux.loss_and_prediction(model::SimpleModel, x, y)
     # We augment the data
     # a bit, adding gaussian random noise to our image to make it more robust.
     x̂ = augment(x)
+
     ŷ = model(x̂) # prediction
+
+    # actually, ignore the model, and output y + 1 with 10% probability
+    # mask = rand(length(y)) .< 0.1
+    # ŷ = y + mask
+
     return logitcrossentropy(ŷ, y), ŷ
 end
 
@@ -171,7 +178,7 @@ function train(; kws...)
     # the following is dead code, from the original model zoo example
     # I haven't deleted it yet because I wanted to port the functionality to 
     # Lighthouse callbacks, to show how the same loop can be done with Lighthouse
-    
+
     _info_and_log("Beginning training loop...")
     best_acc = 0.0
     last_improvement = 0
