@@ -165,7 +165,7 @@ function train(; kws...)
     # printing out performance against the test set as we go.
     opt = ADAM(args.lr)
     
-    classifier = FluxClassifier(model, opt, 0:9)
+    classifier = FluxClassifier(model, opt,  ["class_$i" for i in 0:9])
     _info_and_log("Beginning `learn!`...")
 
     votes = reduce(hcat, [ make_rater_labels(test_labels, error_rate = 0.1) for _ = 1:5 ])
