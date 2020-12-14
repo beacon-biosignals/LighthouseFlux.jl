@@ -29,7 +29,7 @@ Base.@kwdef mutable struct Args
     lr::Float64 = 3e-3
     epochs::Int = 20
     batch_size = 128
-    savepath::String = joinpath(@__DIR__, "logs", "run")
+    savepath::String = joinpath(@__DIR__, "..", "logs", "run")
     run_name::String = "abc"
     logger = LearnLogger(savepath, run_name)
 end
@@ -99,6 +99,8 @@ struct SimpleModel{C}
     end
 end
 
+Flux.@functor SimpleModel (chain,)
+
 # make callable
 (sm::SimpleModel)(args...) = sm.chain(args...)
 
@@ -166,8 +168,11 @@ function train(; kws...)
 
     return cpu.(params(model))
 
+    # the following is dead code, from the original model zoo example
+    # I haven't deleted it yet because I wanted to port the functionality to 
+    # Lighthouse callbacks, to show how the same loop can be done with Lighthouse
+    
     _info_and_log("Beginning training loop...")
-
     best_acc = 0.0
     last_improvement = 0
     best_params = cpu.(params(model))
