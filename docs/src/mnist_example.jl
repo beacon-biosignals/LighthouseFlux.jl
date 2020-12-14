@@ -63,7 +63,7 @@ function make_rater_labels(true_labels; error_rate = 0.1, n_classes = 10)
     out_labels = similar(true_labels)
     for i = eachindex(out_labels, true_labels)
         if rand() < error_rate
-            out_labels[i] = mod(true_labels[i] + 1, n_classes)
+            out_labels[i] = mod(true_labels[i] + 2, n_classes)
         else
             out_labels[i] = true_labels[i]
         end
