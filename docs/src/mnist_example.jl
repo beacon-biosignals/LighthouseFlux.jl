@@ -29,7 +29,7 @@ Base.@kwdef mutable struct Args
     lr::Float64 = 3e-3
     epochs::Int = 20
     batch_size = 128
-    savepath::String = "./output/run" 
+    savepath::String = joinpath(@__DIR__, "logs", "run")
     run_name::String = "abc"
     logger = LearnLogger(savepath, run_name)
 end
