@@ -1,4 +1,10 @@
-# from https://github.com/FluxML/model-zoo/blob/b4732e5a3158391f2fd737470ff63986420e42cd/vision/mnist/conv.jl
+# for now, running this:
+# * Julia 1.4.2
+# * dev LighthouseFlux (i.e. ..) into the docs project
+# * dev https://github.com/beacon-biosignals/Lighthouse.jl/pull/15
+
+# The following example had been modified from
+# https://github.com/FluxML/model-zoo/blob/b4732e5a3158391f2fd737470ff63986420e42cd/vision/mnist/conv.jl
 
 # Classifies MNIST digits with a convolutional network.
 # Writes out saved model to the file "mnist_conv.bson".
@@ -40,20 +46,20 @@ function make_minibatch(X, Y, idxs)
     for i in 1:length(idxs)
         X_batch[:, :, :, i] = Float32.(X[idxs[i]])
     end
-    Y_batch = onehotbatch(Y[idxs], 0:9)
+    Y_batch = onehotbatch(Y[idxs], 1:10)
     return (X_batch, Y_batch)
 end
 
 function get_processed_data(args)
     # Load labels and images from Flux.Data.MNIST
-    train_labels = MNIST.labels()
+    train_labels = MNIST.labels() .+ 1
     train_imgs = MNIST.images()
     mb_idxs = partition(1:length(train_imgs), args.batch_size)
     train_set = [make_minibatch(train_imgs, train_labels, i) for i in mb_idxs] 
     
     # Prepare test set as one giant minibatch:
     test_imgs = MNIST.images(:test)
-    test_labels = MNIST.labels(:test)
+    test_labels = MNIST.labels(:test) .+ 1
     test_set = make_minibatch(test_imgs, test_labels, 1:length(test_imgs))
 
     return train_set, test_set, test_labels
