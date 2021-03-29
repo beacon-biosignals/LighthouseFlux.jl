@@ -47,7 +47,8 @@ end
                 end
             end
             Lighthouse.learn!(classifier, logger, () -> train_batches, () -> test_batches,
-                              votes; epoch_limit=limit, post_epoch_callback=callback)
+                              votes, elected=majority.(StableRNG(22), eachrow(votes), (1:length(classes(model)),));
+                              epoch_limit=limit, post_epoch_callback=callback)
             # NOTE: the RNG chosen above just happens to allow this to work every time,
             # since the loss happens to actually "improve" on the random data each epoch
             @test counted == sum(1:limit)
