@@ -23,8 +23,8 @@ end
         rng = StableRNG(157)
         classes = ["class_$i" for i in 1:5]
         c, n = 5, 3
-        model = TestModel(Chain(Dense(4 * c, 2 * c; initW=ones, initb=zeros),
-                                Dense(2 * c, c; initW=ones, initb=zeros), softmax))
+        model = TestModel(Chain(Dense(4 * c, 2 * c),
+                                Dense(2 * c, c), softmax))
         # assure that `testmode!` and `trainmode!` is being utilized correctly after training
         test_input = rand(StableRNG(42), Float32, 4 * c) # get test input
         y_pretrained = model(test_input) # test model output before being trained
@@ -43,11 +43,11 @@ end
             callback = n -> begin
                 upon_loss_decrease() do _
                     counted += n
-                    @info counted n
                 end
             end
+            elected = majority.(rng, eachrow(votes), (1:length(classes),))
             Lighthouse.learn!(classifier, logger, () -> train_batches, () -> test_batches,
-                              votes; epoch_limit=limit, post_epoch_callback=callback)
+                              votes, elected; epoch_limit=limit, post_epoch_callback=callback)
             # NOTE: the RNG chosen above just happens to allow this to work every time,
             # since the loss happens to actually "improve" on the random data each epoch
             @test counted == sum(1:limit)
