@@ -45,7 +45,7 @@ end
                     counted += n
                 end
             end
-            elected = majority.(rng, eachrow(votes), (1:length(classes),))
+            elected = majority.((rng,), eachrow(votes), (1:length(classes),))
             Lighthouse.learn!(classifier, logger, () -> train_batches, () -> test_batches,
                               votes, elected; epoch_limit=limit, post_epoch_callback=callback)
             # NOTE: the RNG chosen above just happens to allow this to work every time,
