@@ -1,5 +1,5 @@
 using Test, StableRNGs
-using LighthouseFlux, Lighthouse, Flux
+using LighthouseFlux, Lighthouse, Flux, Random
 
 # Set up plotting backend for Plots.jl (GR)
 using Lighthouse.Plots
@@ -23,6 +23,7 @@ end
         rng = StableRNG(157)
         classes = ["class_$i" for i in 1:5]
         c, n = 5, 3
+        Random.seed!(0)
         model = TestModel(Chain(Dense(4 * c, 2 * c),
                                 Dense(2 * c, c), softmax))
         # assure that `testmode!` and `trainmode!` is being utilized correctly after training
