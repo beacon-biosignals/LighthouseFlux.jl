@@ -1,10 +1,8 @@
 using Test, StableRNGs
 using LighthouseFlux, Lighthouse, Flux
 
-# Set up plotting backend for Plots.jl (GR)
-using Lighthouse.Plots
-gr()
-GR.inline("png")
+using CairoMakie
+CairoMakie.activate!(type="png")
 
 mutable struct TestModel
     chain::Chain
