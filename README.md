@@ -1,7 +1,7 @@
 # LighthouseFlux.jl
 
 [![CI](https://github.com/beacon-biosignals/LighthouseFlux.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/beacon-biosignals/LighthouseFlux.jl/actions/workflows/CI.yml)
-[![codecov](https://codecov.io/gh/beacon-biosignals/LighthouseFlux.jl/branch/master/graph/badge.svg?token=aOni8ATb88)](https://codecov.io/gh/beacon-biosignals/LighthouseFlux.jl)
+[![codecov](https://codecov.io/gh/beacon-biosignals/LighthouseFlux.jl/branch/main/graph/badge.svg?token=aOni8ATb88)](https://codecov.io/gh/beacon-biosignals/LighthouseFlux.jl)
 [![Docs: stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://beacon-biosignals.github.io/LighthouseFlux.jl/stable)
 [![Docs: development](https://img.shields.io/badge/docs-dev-blue.svg)](https://beacon-biosignals.github.io/LighthouseFlux.jl/dev)
 
