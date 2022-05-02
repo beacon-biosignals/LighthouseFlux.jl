@@ -3,6 +3,8 @@ module LighthouseFlux
 using Zygote: Zygote
 using Flux: Flux
 using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!
+using Functors
+using Statistics
 
 export FluxClassifier
 
@@ -81,6 +83,41 @@ function loss_and_prediction(model, input_batch, other_batch_arguments...)
     return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
+# Modified from `Functors.fmap`
+function fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
+                        prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
+    walk = (f, x) -> for (k, v) in pairs(Functors.children(x))
+        F(combine(keys, k), v)
+        f(k, v)
+    end
+    haskey(cache, x) && return prune isa Functors.NoKeyword ? cache[x] : prune
+    cache[x] = exclude(x) ? (keys, x) :
+               walk((k, x) -> fforeach_pairs(F, x, combine(keys, k); combine, exclude,
+                                             cache, prune), x)
+    return nothing
+end
+
+"""
+    log_gradients!(logger, classifier, gradients)
+
+Logs out weights and gradients using [`summarize_array`](@ref). Defaults to taking the `mean`,
+but loggers can define methods for `summarize_array` to customize this behavior.
+"""
+function log_gradients!(logger, classifier, gradients)
+    values = Dict{String, Any}()
+    fforeach_pairs(classifier.model, "";
+                combine=(ks, k) -> string(ks, "/", k)) do k, v
+        if haskey(gradients, v)
+            values[string("gradient", k)] = summarize_array(logger, gradients[v])
+        end
+        if v isa AbstractArray
+            values[string("weight", k)] = summarize_array(logger, v)
+        end
+    end
+    log_values!(logger, values)
+    return nothing
+end
+
 #####
 ##### Lighthouse `AbstractClassifier` Interface
 #####
@@ -108,6 +145,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
         gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
+        log_gradients!(logger, classifier, gradients)
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
