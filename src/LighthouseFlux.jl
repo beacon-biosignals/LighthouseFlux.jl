@@ -112,6 +112,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
+        step_logger!(logger)
     end
     Flux.testmode!(classifier.model)
     return nothing
