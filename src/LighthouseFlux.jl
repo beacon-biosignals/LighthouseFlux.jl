@@ -2,7 +2,9 @@ module LighthouseFlux
 
 using Zygote: Zygote
 using Flux: Flux
-using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!
+using Lighthouse: Lighthouse, classes, log_resource_info!, log_values!, log_arrays!, step_logger!
+using Functors
+using Statistics
 
 export FluxClassifier
 
@@ -81,6 +83,92 @@ function loss_and_prediction(model, input_batch, other_batch_arguments...)
     return (loss(model, input_batch, other_batch_arguments...), model(input_batch))
 end
 
+# Modified from `Functors.fmap`
+"""
+    fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
+                   prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
+
+Walks the Functors.jl-compatible graph `x` (by calling `pairs ∘ Functors.children`), applying
+`F(parent_key, child)` at each step along the way. Here `parent_key` is the `key` part of a
+key-value pair returned from `pairs ∘ Functors.children`, combined with the previous `parent_key`
+by `combine`.
+
+## Example
+
+```jldoctest ex
+julia> using Functors, LighthouseFlux
+
+julia> struct Foo; x; y; end
+
+julia> @functor Foo
+
+julia> struct Bar; x; end
+
+julia> @functor Bar
+
+julia> m = Foo(Bar([1,2,3]), (4, 5, Bar(Foo(6, 7))));
+
+julia> LighthouseFlux.fforeach_pairs((k,v) -> @show((k, v)), m)
+(k, v) = ((:x,), Bar([1, 2, 3]))
+(k, v) = ((:x, :x), [1, 2, 3])
+(k, v) = ((:y,), (4, 5, Bar(Foo(6, 7))))
+(k, v) = ((:y, 1), 4)
+(k, v) = ((:y, 2), 5)
+(k, v) = ((:y, 3), Bar(Foo(6, 7)))
+(k, v) = ((:y, 3, :x), Foo(6, 7))
+(k, v) = ((:y, 3, :x, :x), 6)
+(k, v) = ((:y, 3, :x, :y), 7)
+```
+
+The `combine` argument can be used to customize how the keys are combined. For example
+
+```jldoctest ex
+julia> LighthouseFlux.fforeach_pairs((k,v) -> @show((k, v)), m, ""; combine=(ks, k) -> string(ks, "/", k))
+(k, v) = ("/x", Bar([1, 2, 3]))
+(k, v) = ("/x/x", [1, 2, 3])
+(k, v) = ("/y", (4, 5, Bar(Foo(6, 7))))
+(k, v) = ("/y/1", 4)
+(k, v) = ("/y/2", 5)
+(k, v) = ("/y/3", Bar(Foo(6, 7)))
+(k, v) = ("/y/3/x", Foo(6, 7))
+(k, v) = ("/y/3/x/x", 6)
+(k, v) = ("/y/3/x/y", 7)
+
+```
+
+"""
+function fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
+                        prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
+    walk = (f, x) -> for (k, v) in pairs(Functors.children(x))
+        F(combine(keys, k), v)
+        f(k, v)
+    end
+    haskey(cache, x) && return prune isa Functors.NoKeyword ? cache[x] : prune
+    cache[x] = exclude(x) ? (keys, x) :
+               walk((k, x) -> fforeach_pairs(F, x, combine(keys, k); combine, exclude,
+                                             cache, prune), x)
+    return nothing
+end
+
+"""
+    gather_weights_gradients(classifier, gradients)
+
+Collects the weights and gradients from `classifier` into a `Dict`.
+"""
+function gather_weights_gradients(classifier, gradients)
+    values = Dict{String, Any}()
+    fforeach_pairs(classifier.model, "";
+                combine=(ks, k) -> string(ks, "/", k)) do k, v
+        if haskey(gradients, v)
+            values[string("train/gradients", k)] = gradients[v]
+        end
+        if v isa AbstractArray
+            values[string("train/weights", k)] = v
+        end
+    end
+    return values
+end
+
 #####
 ##### Lighthouse `AbstractClassifier` Interface
 #####
@@ -98,13 +186,14 @@ Lighthouse.onecold(classifier::FluxClassifier, label) = classifier.onecold(label
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
     Flux.trainmode!(classifier.model)
     weights = Zygote.Params(classifier.params)
-    for batch in batches
+    for (i, batch) in enumerate(batches)
         train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                               suffix="_per_batch") do
             f = () -> loss(classifier.model, batch...)
             return Zygote.pullback(f, weights)
         end
-        log_value!(logger, "train/loss_per_batch", train_loss)
+        log_values!(logger, ("train/loss_per_batch" => train_loss,
+                             "train/batch_index" => i))
         gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
@@ -112,6 +201,8 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
+        log_arrays!(logger, gather_weights_gradients(classifier, gradients))
+        step_logger!(logger)
     end
     Flux.testmode!(classifier.model)
     return nothing
