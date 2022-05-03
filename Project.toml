@@ -18,7 +18,7 @@ Functors = "0.2.8"
 Lighthouse = "0.14.6"
 StableRNGs = "1.0"
 Zygote = "0.4.13, 0.5, 0.6"
-julia = "1.5"
+julia = "1.6"
 
 [extras]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
