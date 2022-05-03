@@ -12,10 +12,10 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
-CairoMakie = "0.6.2"
+CairoMakie = "0.6.2, 0.7"
 Flux = "0.10.4, 0.11, 0.12"
 Functors = "0.2.8"
-Lighthouse = "0.12, 0.13"
+Lighthouse = "0.14.6"
 StableRNGs = "1.0"
 Zygote = "0.4.13, 0.5, 0.6"
 julia = "1.5"

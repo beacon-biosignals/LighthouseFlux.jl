@@ -2,7 +2,7 @@ module LighthouseFlux
 
 using Zygote: Zygote
 using Flux: Flux
-using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!
+using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!, log_arrays!
 using Functors
 using Statistics
 
@@ -84,6 +84,56 @@ function loss_and_prediction(model, input_batch, other_batch_arguments...)
 end
 
 # Modified from `Functors.fmap`
+"""
+    fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
+                   prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
+
+Walks the Functors.jl-compatible graph `x` (by calling `pairs ∘ Functors.children`), applying `F(parent_key, child)` at each step along the way. Here `parent_key` is the `key` part of a key-value pair returned from `pairs ∘ Functors.children`, combined with the previous `parent_key` by `combine`.
+
+## Example
+
+```jldoctest ex
+julia> using Functors, LighthouseFlux
+
+julia> struct Foo; x; y; end
+
+julia> @functor Foo
+
+julia> struct Bar; x; end
+
+julia> @functor Bar
+
+julia> m = Foo(Bar([1,2,3]), (4, 5, Bar(Foo(6, 7))));
+
+julia> LighthouseFlux.fforeach_pairs((k,v) -> @show((k, v)), m)
+(k, v) = ((:x,), Bar([1, 2, 3]))
+(k, v) = ((:x, :x), [1, 2, 3])
+(k, v) = ((:y,), (4, 5, Bar(Foo(6, 7))))
+(k, v) = ((:y, 1), 4)
+(k, v) = ((:y, 2), 5)
+(k, v) = ((:y, 3), Bar(Foo(6, 7)))
+(k, v) = ((:y, 3, :x), Foo(6, 7))
+(k, v) = ((:y, 3, :x, :x), 6)
+(k, v) = ((:y, 3, :x, :y), 7)
+```
+
+The `combine` argument can be used to customize how the keys are combined. For example
+
+```jldoctest ex
+julia> LighthouseFlux.fforeach_pairs((k,v) -> @show((k, v)), m, ""; combine=(ks, k) -> string(ks, "/", k))
+(k, v) = ("/x", Bar([1, 2, 3]))
+(k, v) = ("/x/x", [1, 2, 3])
+(k, v) = ("/y", (4, 5, Bar(Foo(6, 7))))
+(k, v) = ("/y/1", 4)
+(k, v) = ("/y/2", 5)
+(k, v) = ("/y/3", Bar(Foo(6, 7)))
+(k, v) = ("/y/3/x", Foo(6, 7))
+(k, v) = ("/y/3/x/x", 6)
+(k, v) = ("/y/3/x/y", 7)
+
+```
+
+"""
 function fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
                         prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
     walk = (f, x) -> for (k, v) in pairs(Functors.children(x))
@@ -98,24 +148,22 @@ function fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
 end
 
 """
-    log_gradients!(logger, classifier, gradients)
+    gather_weights_gradients(classifier, gradients)
 
-Logs out weights and gradients using [`summarize_array`](@ref). Defaults to taking the `mean`,
-but loggers can define methods for `summarize_array` to customize this behavior.
+Collects the weights and gradients from `classifier` into a `Dict`.
 """
-function log_gradients!(logger, classifier, gradients)
+function gather_weights_gradients(classifier, gradients)
     values = Dict{String, Any}()
     fforeach_pairs(classifier.model, "";
                 combine=(ks, k) -> string(ks, "/", k)) do k, v
         if haskey(gradients, v)
-            values[string("gradient", k)] = summarize_array(logger, gradients[v])
+            values[string("gradient", k)] = gradients[v]
         end
         if v isa AbstractArray
-            values[string("weight", k)] = summarize_array(logger, v)
+            values[string("weight", k)] = v
         end
     end
-    log_values!(logger, values)
-    return nothing
+    return values
 end
 
 #####
@@ -145,7 +193,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
         gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
-        log_gradients!(logger, classifier, gradients)
+        log_arrays!(logger, gather_weights_gradients(classifier, gradients))
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
