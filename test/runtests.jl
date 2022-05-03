@@ -1,5 +1,6 @@
 using Test, StableRNGs
 using LighthouseFlux, Lighthouse, Flux, Random
+using Statistics
 
 using CairoMakie
 CairoMakie.activate!(type="png")
@@ -64,6 +65,14 @@ end
             "train/update/gc_time_in_seconds_per_batch"
             "train/update/allocations_per_batch"
             "train/update/memory_in_mb_per_batch"
+            "train/gradients/chain/1/weight"
+            "train/gradients/chain/2/bias"
+            "train/gradients/chain/2/weight"
+            "train/gradients/chain/1/bias"
+            "train/weights/chain/1/weight"
+            "train/weights/chain/2/bias"
+            "train/weights/chain/2/weight"
+            "train/weights/chain/1/bias"
         ]
             @test length(logger.logged[key]) == length(train_batches) * limit
         end
@@ -97,6 +106,9 @@ end
                                     onehot=(x -> fill(x, length(classes))), onecold=sum)
         @test Lighthouse.onehot(classifier, 3) == fill(3, length(classes))
         @test Lighthouse.onecold(classifier, [0.31, 0.43, 0.13]) == 0.87
+
+        @test mean(classifier.model.chain[1].weight) ≈ logger.logged["train/weights/chain/1/weight"][end]
+        @test mean(classifier.model.chain[2].weight) ≈ logger.logged["train/weights/chain/2/weight"][end]
     end
 end
 

@@ -157,10 +157,10 @@ function gather_weights_gradients(classifier, gradients)
     fforeach_pairs(classifier.model, "";
                 combine=(ks, k) -> string(ks, "/", k)) do k, v
         if haskey(gradients, v)
-            values[string("gradient", k)] = gradients[v]
+            values[string("train/gradients", k)] = gradients[v]
         end
         if v isa AbstractArray
-            values[string("weight", k)] = v
+            values[string("train/weights", k)] = v
         end
     end
     return values
@@ -194,11 +194,11 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
         gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
-        log_arrays!(logger, gather_weights_gradients(classifier, gradients))
         log_resource_info!(logger, "train/update"; suffix="_per_batch") do
             Flux.Optimise.update!(classifier.optimiser, weights, gradients)
             return nothing
         end
+        log_arrays!(logger, gather_weights_gradients(classifier, gradients))
     end
     Flux.testmode!(classifier.model)
     return nothing
