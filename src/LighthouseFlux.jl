@@ -2,7 +2,7 @@ module LighthouseFlux
 
 using Zygote: Zygote
 using Flux: Flux
-using Lighthouse: Lighthouse, classes, log_resource_info!, log_values!, log_arrays!
+using Lighthouse: Lighthouse, classes, log_resource_info!, log_values!, log_arrays!, step_logger!
 using Functors
 using Statistics
 
@@ -199,6 +199,7 @@ function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
             return nothing
         end
         log_arrays!(logger, gather_weights_gradients(classifier, gradients))
+        step_logger!(logger)
     end
     Flux.testmode!(classifier.model)
     return nothing
