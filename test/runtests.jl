@@ -36,19 +36,18 @@ end
         logger = Lighthouse.LearnLogger(joinpath(tmpdir, "logs"), "test_run")
         limit = 4
         let counted = 0
-            upon_loss_decrease = Lighthouse.upon(logger,
-                                                 "test_set_prediction/mean_loss_per_epoch";
-                                                 condition=<, initial=Inf)
+            # Every epoch has the same number of batches, namely 100
+            upon_batch_index_same = Lighthouse.upon(logger,
+                                                 "train/batch_index";
+                                                 condition=(==), initial=100)
             callback = n -> begin
-                upon_loss_decrease() do _
+                upon_batch_index_same() do _
                     counted += n
                 end
             end
             elected = majority.((rng,), eachrow(votes), (1:length(classes),))
             Lighthouse.learn!(classifier, logger, () -> train_batches, () -> test_batches,
                               votes, elected; epoch_limit=limit, post_epoch_callback=callback)
-            # NOTE: the RNG chosen above just happens to allow this to work every time,
-            # since the loss happens to actually "improve" on the random data each epoch
             @test counted == sum(1:limit)
         end
         for key in [

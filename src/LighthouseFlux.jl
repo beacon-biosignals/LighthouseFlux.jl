@@ -2,7 +2,7 @@ module LighthouseFlux
 
 using Zygote: Zygote
 using Flux: Flux
-using Lighthouse: Lighthouse, classes, log_resource_info!, log_value!, log_arrays!
+using Lighthouse: Lighthouse, classes, log_resource_info!, log_values!, log_arrays!
 using Functors
 using Statistics
 
@@ -183,13 +183,14 @@ Lighthouse.onecold(classifier::FluxClassifier, label) = classifier.onecold(label
 function Lighthouse.train!(classifier::FluxClassifier, batches, logger)
     Flux.trainmode!(classifier.model)
     weights = Zygote.Params(classifier.params)
-    for batch in batches
+    for (i, batch) in enumerate(batches)
         train_loss, back = log_resource_info!(logger, "train/forward_pass";
                                               suffix="_per_batch") do
             f = () -> loss(classifier.model, batch...)
             return Zygote.pullback(f, weights)
         end
-        log_value!(logger, "train/loss_per_batch", train_loss)
+        log_values!(logger, ("train/loss_per_batch" => train_loss,
+                             "train/batch_index" => i))
         gradients = log_resource_info!(logger, "train/reverse_pass"; suffix="_per_batch") do
             return back(Zygote.sensitivity(train_loss))
         end
