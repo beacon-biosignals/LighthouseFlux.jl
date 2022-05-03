@@ -88,7 +88,10 @@ end
     fforeach_pairs(F, x, keys=(); exclude=Functors.isleaf, cache=IdDict(),
                    prune=Functors.NoKeyword(), combine=(ks, k) -> (ks..., k))
 
-Walks the Functors.jl-compatible graph `x` (by calling `pairs ∘ Functors.children`), applying `F(parent_key, child)` at each step along the way. Here `parent_key` is the `key` part of a key-value pair returned from `pairs ∘ Functors.children`, combined with the previous `parent_key` by `combine`.
+Walks the Functors.jl-compatible graph `x` (by calling `pairs ∘ Functors.children`), applying
+`F(parent_key, child)` at each step along the way. Here `parent_key` is the `key` part of a
+key-value pair returned from `pairs ∘ Functors.children`, combined with the previous `parent_key`
+by `combine`.
 
 ## Example
 
